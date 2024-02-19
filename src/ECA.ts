@@ -148,6 +148,7 @@ class CA {
     rule: number,
     neighborhoodMap: Vector[]
   ) {
+    this.ruleList = this.initializeRules(rule, neighborhoodMap);
     this.cellSpace = initialConfig;
     this.initializeGlobspace();
     this.generateNeighborhoods(neighborhoodMap);
@@ -157,6 +158,17 @@ class CA {
       num_rectangles_wide,
       boundingRect
     );
+  }
+
+  initializeRules(rule: number, neighborhoodMap: Vector[]): number[] {
+    let ruleList: number[] = [];
+    let neighborhoodStateSpaceSize = Math.pow(POSSIBLESTATES, neighborhoodMap.length);
+    for(let i = neighborhoodStateSpaceSize; i > 0; i--) {
+      ruleList[i] = rule % POSSIBLESTATES;
+      rule /= POSSIBLESTATES;
+    }
+    console.log(ruleList);
+    return ruleList;
   }
 
   initializeGlobspace() {
