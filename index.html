@@ -4,16 +4,20 @@
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="css/styles.css" />
     <!-- Load the Paper.js library -->
-    <!-- <script type="text/javascript" src="node_modules/paper/dist/paper-full.js"></script> -->
+	<!--script type="text/javascript" src="node_modules/paper/dist/paper-full.js"></script--> 
+
     <!-- Load external PaperScript and associate it with myCanvas -->
-    <script
-      type="text/javascript"
-      src="js/ECA.js"
+	      <script type="text/javascript" src="dist/bundle.js" canvas="myCanvas" resize = "true"></script> 
+
+    <!-- <script
+      type="module"
+      src="compile/ECA.js"
       canvas="myCanvas"
-    ></script>
+    ></script> -->
+	<reference types="webpack/module" />
   </head>
   <body>
-
     <canvas id="myCanvas" resize></canvas>
   </body>
+
 </html>
