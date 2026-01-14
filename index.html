@@ -1,23 +1,51 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="stylesheet" href="css/styles.css" />
-    <!-- Load the Paper.js library -->
-	<!--script type="text/javascript" src="node_modules/paper/dist/paper-full.js"></script--> 
 
-    <!-- Load external PaperScript and associate it with myCanvas -->
-	      <script type="text/javascript" src="dist/bundle.js" canvas="myCanvas" resize = "true"></script> 
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <!-- Load the Paper.js library -->
+  <!--script type="text/javascript" src="node_modules/paper/dist/paper-full.js"></script-->
 
-    <!-- <script
+  <!-- Load external PaperScript and associate it with myCanvas -->
+  <script type="text/javascript" src="dist/bundle.js" canvas="myCanvas" resize="true"></script>
+
+  <!-- <script
       type="module"
       src="compile/ECA.js"
       canvas="myCanvas"
     ></script> -->
-	<reference types="webpack/module" />
-  </head>
-  <body>
-    <canvas id="myCanvas" resize></canvas>
-  </body>
+  <reference types="webpack/module" />
+</head>
+
+<body>
+  <button class="openbtn" onclick="openNav()">☰ Open Sidebar</button>  
+  <canvas id="myCanvas" resize></canvas>
+</body>
+
+<div id="mySidebar" class="sidebar">
+  <a href="javascript:void(0)" class="closebtn" onclick="closeNav()">×</a>
+  <form id = "configForm">
+    <label for="width">Width</label>
+    <input type="number" id="width" name="width" min="1" max="255" value="8">
+    <label for="height">Height</label>
+    <input type="number" id="height" name="height" min="1" max="1000" value="1">
+    <label for="initialConfig">Initial Configuration</label>
+    <input type="text" id="initialConfig" name="initialConfig" value="1,0,1,0,1,0,1,0">
+    <input type="submit" value="Submit">
+  </form>
+</div>
+
+<script>
+  function openNav() {
+    document.getElementById("mySidebar").style.width = "250px";
+    document.getElementById("myCanvas").style.marginLeft = "250px";
+  }
+
+  function closeNav() {
+    document.getElementById("mySidebar").style.width = "0";
+    document.getElementById("myCanvas").style.marginLeft = "0";
+  }
+</script>
 
 </html>
