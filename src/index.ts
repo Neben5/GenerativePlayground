@@ -1,6 +1,6 @@
 import * as _ from "lodash";
-import * as eca from "./ECA"
-import { entry } from "../webpack.config";
+import * as eca from "./ECA";
+// import { entry } from "../webpack.config";
 
 
 document.addEventListener("DOMContentLoaded", function (arg) {

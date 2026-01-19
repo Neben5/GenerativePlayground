@@ -1,6 +1,12 @@
 import * as paper from "paper";
 import { Vector } from "@geometric/vector";
 
+export enum states {
+  EMPTY = 0,
+  SAND = 1,
+  COMPACTED_SAND = 2,
+  ROCK = -1,
+}
 export class CellSpace {
 
 
@@ -33,7 +39,7 @@ export class CellSpace {
         for (let dimension_idx = 0; dimension_idx < dimensionOrders.length; dimension_idx++) {
             ncells *= dimensionOrders[dimension_idx];
         }
-        this.cells = new Array<Cell>(ncells);
+        this.cells = new Array<Cell>(ncells).fill(new Cell(0));
         this.dimensionOrders = dimensionOrders;
         this.indexOrders = new Array<number>(dimensionOrders.length);
         let indexOrder = 1;
@@ -109,7 +115,7 @@ export class CellSpace {
         let neighborhood: Cell[] = [-1, 0, 1].map((offset) => {
             let neighborPosition = position.add(new Vector(0, offset));
             if (!this.getPositionIsValid(neighborPosition)) {
-                return new Cell(0);
+                return new Cell(states.EMPTY);
             }
             return this.getCellAtIndex(this.getIndex(neighborPosition));
         });
@@ -120,7 +126,7 @@ export class CellSpace {
         let neighborhood: Cell[] = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1]].map((offset) => {
             let neighborPosition = position.add(new Vector(offset[0], offset[1]));
             if (!this.getPositionIsValid(neighborPosition)) {
-                return new Cell(0);
+                return new Cell(states.ROCK);
             }   
             return this.getCellAtIndex(this.getIndex(neighborPosition));
         });

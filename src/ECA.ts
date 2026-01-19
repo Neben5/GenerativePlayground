@@ -1,9 +1,12 @@
 import * as paper from "paper";
 import { Vector } from "@geometric/vector";
-import { CellSpace, Cell } from "./Cells";
+import { CellSpace, Cell, states } from "./Cells";
 
 var POSSIBLESTATES = 2;
 var DIMENSIONORDERS = [8, 2];
+var TICKRATE = 0;
+var STOP = 0;
+
 class CanvasSpace {
   boundingRect: paper.Rectangle;
   height_count: number;
@@ -41,7 +44,16 @@ class CanvasSpace {
           size
         );
         aRect.strokeColor = new paper.Color("grey");
-        aRect.fillColor = state ? new paper.Color("brown") : new paper.Color("white");
+        const fillColor = (() => {
+          switch (state) {
+            case states.EMPTY: return new paper.Color("white");
+            case states.SAND: return new paper.Color("#f5c264");
+            case states.COMPACTED_SAND: return new paper.Color("#bc7b3aff");
+            case states.ROCK: return new paper.Color("grey");
+            default: return new paper.Color("black");
+          }
+        })();
+        aRect.fillColor = fillColor;
       }
     }
   }
@@ -95,22 +107,60 @@ class CA {
   }
 
   public sandRule(neighborhood: Cell[]): number {
-    const up = neighborhood[5].state;
+    const upLeft = neighborhood[0].state;
+    const up = neighborhood[1].state;
+    const upRight = neighborhood[2].state;
+    const left = neighborhood[3].state;
     const self = neighborhood[4].state;
-    const down = neighborhood[3].state;
-    // const downLeft = neighborhood[0].state;
-    // const downRight = neighborhood[2].state;
-    if (up && !self) {
-      return up;
-    } else if (self && !down) {
-      return 0;
+    const right = neighborhood[5].state;
+    const downLeft = neighborhood[6].state;
+    const down = neighborhood[7].state;
+    const downRight = neighborhood[8].state;
+    switch (self) {
+      case states.EMPTY:
+        if (up == states.SAND) {
+          return states.SAND;
+        }
+        if (upRight == states.SAND && right != states.EMPTY && up == states.EMPTY) {
+          return states.SAND;
+        }
+        if (left == states.COMPACTED_SAND && upLeft == states.SAND && downLeft != states.EMPTY) {
+          return states.SAND;
+        }
+        return states.EMPTY;
+      case states.SAND:
+        if (down == states.EMPTY) {
+          return states.EMPTY;
+        }
+        if (downLeft == states.EMPTY && left == states.EMPTY) {
+          return states.EMPTY;
+        }
+        if (down && (up == states.SAND || up == states.COMPACTED_SAND)) {
+          return states.COMPACTED_SAND;
+        }
+        if (down == states.COMPACTED_SAND && right == states.EMPTY && downRight == states.EMPTY) {
+          return states.EMPTY;
     }
-    return self;
+        return states.SAND;
+      case states.COMPACTED_SAND:
+        if (down == states.EMPTY) {
+          return states.SAND;
+        }
+        if (down == states.SAND) {
+          return states.SAND;
+        }
+        if (up == states.EMPTY || up == states.ROCK) {
+          return states.SAND;
+        }
+        return states.COMPACTED_SAND;
+      case states.ROCK:
+        return states.ROCK;
+    }
+
   }
 
   public applyRule(neighborhood: Cell[]): number {
-    return this.elemRule(neighborhood);
-
+    return this.sandRule(neighborhood);
   }
 
 
@@ -139,7 +189,7 @@ Cell.prototype.toString = function () {
   return this.state;
 };
 
-let initialConfig = [1, 1, 0, 1, 0, 1, 0, 1, 2, 2, 2, 2, 2, 2, 2, 2];
+let initialConfig = [0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1,];
 
 var ca: CA;
 
