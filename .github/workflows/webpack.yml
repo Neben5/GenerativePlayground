@@ -36,6 +36,7 @@ jobs:
           npx webpack
       - name: Upload Artifact
         uses: actions/upload-pages-artifact@v4
+        #artifact names must be unique
         with:
           path: '.'
 
