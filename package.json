@@ -2,21 +2,18 @@
   "dependencies": {
     "@geometric/vector": "^1.0.1",
     "@types/lodash": "^4.14.202",
-    "http-server": "^0.12.1",
     "ts-loader": "^9.5.1",
-    "typescript": "^5.3.3",
-    "webpack": "^4.41.5",
-    "webpack-cli": "^3.3.10"
+    "typescript": "^5.3.3"
   },
   "devDependencies": {
     "@geometric/vector": "^1.0.1",
     "@types/lodash": "^4.14.202",
     "gh-pages": "^6.3.0",
-    "http-server": "^0.12.1",
+    "http-server": "^14.1.1",
     "ts-loader": "^9.5.1",
     "typescript": "^5.3.3",
-    "webpack": "^4.41.5",
-    "webpack-cli": "^3.3.10"
+    "webpack": "^5.104.1",
+    "webpack-cli": "^6.0.1"
   },
   "scripts": {
     "serve": "http-server -o",
