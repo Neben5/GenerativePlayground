@@ -2,8 +2,7 @@
   "dependencies": {
     "@geometric/vector": "^1.0.1",
     "@types/lodash": "^4.14.202",
-    "ts-loader": "^9.5.1",
-    "typescript": "^5.3.3"
+    "paper": "^0.12.18"
   },
   "devDependencies": {
     "@geometric/vector": "^1.0.1",
