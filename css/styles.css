@@ -2,6 +2,21 @@ html,
 body {
     height: 100%;
     overflow: hidden;
+    margin: 0;
+}
+
+.canvas-container {
+    position: absolute; /* Establishes a positioning context */
+    display: flex;
+    height: 95vh; /* Makes the container the full height of the viewport */
+    width: 95vw; 
+}
+
+/* Scale canvas with resize attribute to full size of its container */
+canvas[resize] {
+    width: fit-content;
+    height: fit-content;
+    display: block; /* Helps with layout issues */
 }
 
 /* Scale canvas with resize attribute to full size */

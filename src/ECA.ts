@@ -4,8 +4,10 @@ import { CellSpace, Cell, states } from "./Cells";
 
 var POSSIBLESTATES = 2;
 var DIMENSIONORDERS = [8, 2];
-var TICKRATE = 0;
-var STOP = 0;
+var TICKRATE = 60;
+var STOP = true;
+
+var tickLoopIntervalId: NodeJS.Timeout = null;
 
 class CanvasSpace {
   boundingRect: paper.Rectangle;
@@ -56,6 +58,7 @@ class CanvasSpace {
         aRect.fillColor = fillColor;
       }
     }
+    paper.project.activeLayer.fitBounds(paper.view.bounds);
   }
 
   updateBounds(newBounds: paper.Rectangle) {
@@ -140,7 +143,7 @@ class CA {
         }
         if (down == states.COMPACTED_SAND && right == states.EMPTY && downRight == states.EMPTY) {
           return states.EMPTY;
-    }
+        }
         return states.SAND;
       case states.COMPACTED_SAND:
         if (down == states.EMPTY) {
@@ -209,13 +212,44 @@ export function resizeEvent(event: Event) {
 export function keypressEvent(event: KeyboardEvent) {
   switch (event.key) {
     case " ": {
-      ca.iterate();
-      ca.redraw();
+      tickAction();
       break;
     }
     default: {
       break;
     }
+  }
+}
+
+function tickAction() {
+  ca.iterate();
+  ca.redraw();
+}
+
+export function toggleTickLoop() {
+  STOP = !STOP;
+  console.log(`tickloop ${tickLoopIntervalId} : STOP ${STOP}`);
+  if (STOP && tickLoopIntervalId) {
+    clearInterval(tickLoopIntervalId);
+    tickLoopIntervalId = null;
+  } else if (!STOP && TICKRATE) {
+    const ts = 1000.0 / TICKRATE;
+    tickLoopIntervalId = setInterval(tickAction, ts);
+    console.log(`tickloop at ${TICKRATE} / every ${ts}ms`);
+  }
+}
+
+export function triggerTickRateChange() {
+  var tickrate = parseInt((document.getElementById('tickRate') as HTMLInputElement).value);
+  TICKRATE = tickrate;
+
+  if (tickLoopIntervalId) {
+    clearInterval(tickLoopIntervalId);
+    tickLoopIntervalId = null;
+  }
+  if (!STOP) {
+    const ts = 1000.0 / TICKRATE;
+    tickLoopIntervalId = setInterval(tickAction, ts);
   }
 }
 
@@ -225,6 +259,7 @@ export function submitEvent(event: Event) {
   // Handle form data with JavaScript
   var height = parseInt((document.getElementById('height') as HTMLInputElement).value);
   var width = parseInt((document.getElementById('width') as HTMLInputElement).value);
+
   DIMENSIONORDERS = [width, height];
   ca = new CA(
     width,
@@ -233,4 +268,5 @@ export function submitEvent(event: Event) {
   );
   initialConfig = (document.getElementById('initialConfig') as HTMLInputElement).value.split(',').map(Number);
   ca.redraw();
+
 }
