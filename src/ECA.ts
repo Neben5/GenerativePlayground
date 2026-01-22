@@ -316,6 +316,9 @@ export function entry() {
   paper.setup("myCanvas");
   ca = new CA(DIMENSIONORDERS[0], DIMENSIONORDERS[1], paper.view.bounds);
   ca.redraw();
+  
+  // Initialize stop button state to match STOP variable
+  updateStopButtonState();
 }
 
 //* EVENT HANDLERS *//
@@ -351,6 +354,18 @@ export function toggleTickLoop() {
     const ts = 1000.0 / TICKRATE;
     tickLoopIntervalId = setInterval(tickAction, ts);
     console.log(`tickloop at ${TICKRATE} / every ${ts}ms`);
+  }
+  // Sync checkbox state with actual state
+  updateStopButtonState();
+}
+
+/**
+ * Update the stop button checkbox to match the current state
+ */
+function updateStopButtonState() {
+  const stopButton = document.getElementById("stopButton") as HTMLInputElement;
+  if (stopButton) {
+    stopButton.checked = STOP;
   }
 }
 
