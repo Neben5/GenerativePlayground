@@ -1,26 +1,90 @@
 # GenerativePlayground
 
-A cellular automata playground -- maybe eventually a game
+![Build Status](https://github.com/Neben5/GenerativePlayground/actions/workflows/.github/workflows/webpack.yml/badge.svg)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)
+![License](https://img.shields.io/badge/license-GPL3-green)
 
-[neben5.github.io/GenerativePlayground/index.html](https://neben5.github.io/GenerativePlayground/index.html)
+A cellular automata playground for exploring rule-based simulations and emergent behavior.
 
-### Goals / Features
-| Name | Description |
-|- |- |
-| Neighborhood-Rule Matching | Define a set of neighborhoods and rules that can correspond. A 3x3 rule obviously cannot apply to an eca |
-| Paintbrush | Each rule relies on a set of states. Add the ability to select one of those states and 'paint' with it |
-| Simple neighborhood caching | Instead of calculating every neighborhood -- map neighborhood 'hashes' to an output and only calculate on cache misses |
-| Dynamic rule generation | Rules get exponentially more complicated as more states are introduced. Add an editor |
-| Forces | Add 'traits' and 'forces' that act on them |
-| WebGPU | Turns out gpu is good at do lot of little thing many time | 
+[Try it live](https://neben5.github.io/GenerativePlayground/index.html)
 
-### Potential Features
+## Features
 
-| Category | Ideas |
-|- |- |
-| **Simulation Depth** | Multi-rule interactions (gravity + compaction simultaneously); Temperature/energy propagation; Fluid mechanics (water pressure, flow, pooling); Chemical reactions (sand + fire = glass) |
-| **Visual & Interaction** | Zoom & pan for large grids; Pause + frame-by-frame scrubbing; Multi-layer overlays (density, temperature, flow); Preset brushes for painting patterns |
-| **Rule Creation** | Rule versioning/persistence (save custom rulesets); Probability-based rules (80% chance to apply); Time-delayed rules (cell age tracking); Constrained neighborhoods (slope-triggered avalanches) |
-| **Performance** | Active region chunking (only compute falling sand/spreading fire); Rule optimization profiler; Grid serialization (save/load states) |
-| **Game Mechanics** | Challenge modes (tunnel to bottom, build structures); Entity system (agents that interact with cells); Undo/redo stack; Animation keyframes & export |
-| **Technical** | Rule composition DSL/GUI builder; 3D slices & cross-sections; Performance benchmark suite |
+### Implemented
+
+| Feature | Description |
+|---------|-------------|
+| Neighborhood-Rule Matching | Switch between Elementary (1D) and Moore (3×3) neighborhoods with rule-specific implementations |
+| Wolfram's Rule 110 | Elementary cellular automaton with binary state visualization |
+| Sand Physics | 2D particle simulation with gravity and compaction |
+| Real-time UI Updates | Rule and neighborhood dropdowns with dynamic compatibility enforcement |
+| Simulation Control | Play/pause with tick rate adjustment (0-255 Hz) |
+| Grid Configuration | Configurable dimensions and initial cell states |
+
+### In Progress
+
+- Paintbrush tool for interactive state painting
+- Additional rule implementations (Langton's Ant, Game of Life)
+- Grid state persistence (save/load)
+- Frame-by-frame stepping
+
+## Architecture
+
+**Core Modules:**
+- `CARule.ts` - Rule abstraction with neighborhood type definition
+- `Rule110.ts` - Elementary cellular automaton
+- `SandRule.ts` - 2D sand physics simulation
+- `ECA.ts` - Simulation engine and rule registry
+- `UI.ts` - User interface and event handling
+- `Cells.ts` - N-dimensional grid management
+
+**Design:**
+- Each rule manages its own neighborhood queries and boundary handling
+- UI and simulation logic are decoupled
+- State iteration uses buffer swapping to avoid per-frame allocations
+- Rule registry enables extensibility for new automata
+
+## Usage
+
+1. Select a neighborhood type (Elementary or Moore)
+2. Choose a rule compatible with the selected neighborhood
+3. Configure grid dimensions and initial state
+4. Control simulation playback and speed
+5. Observe pattern evolution
+
+## Roadmap
+
+| Priority | Item | Rationale |
+|----------|------|-----------|
+| High | Paintbrush tool | Enables interactive pattern creation |
+| High | Additional rules | Tests rule system extensibility |
+| High | State persistence | Required for workflow continuity |
+| Medium | Zoom/pan | Necessary for large grids |
+| Medium | Frame stepping | Improves analysis capability |
+| Low | GPU acceleration | Performance optimization for future scale |
+
+## Future Directions
+
+**Simulation:**
+- Multi-rule interactions
+- Temperature/energy transport
+- Fluid mechanics
+- Chemical reactions
+
+**Interaction:**
+- State-based painting
+- Pattern presets
+- Visualization modes
+- Timeline scrubbing
+
+**Rule System:**
+- Rule versioning and persistence
+- Probability-based rules
+- Custom neighborhood definitions
+- Rule composition framework
+
+**Performance:**
+- Active region optimization
+- Profiling and benchmarking
+- Parallel computation
+- Serialization/deserialization
