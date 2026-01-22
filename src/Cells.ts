@@ -54,6 +54,11 @@ export class CellSpace {
     }
 
 
+    /**
+     * Get the array index for a given position in the matrix cell space
+     * @param position matrix format (i,j) = (col, row) position
+     * @returns array index
+     */
     getIndex(position: Vector): number {
         if (position.length != this.dimensionOrders.length) {
             throw new DimensionError(
@@ -61,6 +66,7 @@ export class CellSpace {
             );
         }
         let index = 0;
+        // matrix index (y (col), x (row)) -> array index i * nrows + j
         for (let dim = 0; dim < position.length; dim++) {
             index += position[dim] * this.indexOrders[position.length - 1 - dim];
         }
@@ -111,25 +117,39 @@ export class CellSpace {
      * @param position 
      * @returns 
      */
-    elementaryNeighborhood(position: Vector): Cell[] {
-        let neighborhood: Cell[] = [-1, 0, 1].map((offset) => {
-            let neighborPosition = position.add(new Vector(0, offset));
-            if (!this.getPositionIsValid(neighborPosition)) {
-                return new Cell(states.EMPTY);
+    elementaryNeighborhood(position: Vector, outputArray?: Cell[]): Cell[] {
+        const neighborhood = outputArray || new Array(3);
+        const offsets = [-1, 0, 1];
+        for (let i = 0; i < 3; i++) {
+            const offset = offsets[i];
+            const neighborPos = position[1] + offset;
+            if (neighborPos < 0 || neighborPos >= this.dimensionOrders[1]) {
+                neighborhood[i] = this.getCellAtIndex(this.getIndex(position));
+            } else {
+                const idx = position[0] * this.indexOrders[1] + neighborPos;
+                neighborhood[i] = this.cells[idx];
             }
-            return this.getCellAtIndex(this.getIndex(neighborPosition));
-        });
+        }
         return neighborhood;
     }
 
-    threesquareNeighborhood(position: Vector): Cell[] {
-        let neighborhood: Cell[] = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1]].map((offset) => {
-            let neighborPosition = position.add(new Vector(offset[0], offset[1]));
-            if (!this.getPositionIsValid(neighborPosition)) {
-                return new Cell(states.ROCK);
-            }   
-            return this.getCellAtIndex(this.getIndex(neighborPosition));
-        });
+    threesquareNeighborhood(position: Vector, outputArray?: Cell[]): Cell[] {
+        const neighborhood = outputArray || new Array(9);
+        const offsets = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1]];
+        const x = position[0];
+        const y = position[1];
+        let idx = 0;
+        for (const offset of offsets) {
+            const nx = x + offset[0];
+            const ny = y + offset[1];
+            if (nx < 0 || nx >= this.dimensionOrders[0] || ny < 0 || ny >= this.dimensionOrders[1]) {
+                neighborhood[idx] = this.cells[this.getIndex(position)];
+            } else {
+                const cellIdx = nx * this.indexOrders[1] + ny;
+                neighborhood[idx] = this.cells[cellIdx];
+            }
+            idx++;
+        }
         return neighborhood;
     }
 

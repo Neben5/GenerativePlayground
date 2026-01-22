@@ -1,28 +1,20 @@
 import * as _ from "lodash";
 import * as eca from "./ECA";
+import * as ui from "./UI";
 // import { entry } from "../webpack.config";
 
 document.addEventListener("DOMContentLoaded", function (arg) {
-  document.addEventListener("submit", eca.submitEvent);
-  const stopButton = document.getElementById("stopButton");
-  const tickRateInput = document.getElementById("tickRate");
+  // Initialize the simulator
+  (window as any).eca = eca.entry();
+
   
-  stopButton.addEventListener("click", eca.toggleTickLoop);
-  tickRateInput.addEventListener("change", eca.triggerTickRateChange);
-  
-  eca.entry();
-  
-  // Initialize dropdowns from available neighborhoods and rules
-  if ((window as any).initializeNeighborhoodSelect) {
-    (window as any).initializeNeighborhoodSelect();
-  }
+  // Initialize all UI elements and event listeners
+  ui.initializeUI();
 });
 
 window.addEventListener("resize", eca.resizeEvent);
 window.addEventListener("keypress", eca.keypressEvent);
 
-// Export functions to global window for HTML onclick handlers
-(window as any).switchNeighborhoodType = eca.switchNeighborhoodType;
-(window as any).switchRule = eca.switchRule;
-(window as any).getAvailableNeighborhoods = eca.getAvailableNeighborhoods;
-(window as any).getAvailableRulesForNeighborhood = eca.getAvailableRulesForNeighborhood;
+// Export navigation functions to global window for HTML onclick attributes
+(window as any).openNav = ui.openNav;
+(window as any).closeNav = ui.closeNav;

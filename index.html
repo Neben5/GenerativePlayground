@@ -29,13 +29,13 @@
   </form>
   <div>
     <label for="neighborhoodSelect">Neighborhood Type:
-      <select id="neighborhoodSelect" name="neighborhoodSelect" onchange="handleNeighborhoodChange()">
+      <select id="neighborhoodSelect" name="neighborhoodSelect">
       </select>
     </label>
   </div>
   <div>
     <label for="ruleSelect">Rule:
-      <select id="ruleSelect" name="ruleSelect" onchange="handleRuleChange()">
+      <select id="ruleSelect" name="ruleSelect">
       </select>
     </label>
   </div>
@@ -48,70 +48,5 @@
     </label>
   </div>
 </div>
-
-<script>
-  function openNav() {
-    document.getElementById("mySidebar").style.width = "250px";
-    document.getElementById("myCanvas").style.marginLeft = "250px";
-  }
-
-  function closeNav() {
-    document.getElementById("mySidebar").style.width = "0";
-    document.getElementById("myCanvas").style.marginLeft = "0";
-  }
-
-  /**
-   * Initialize neighborhood dropdown from available neighborhoods
-   */
-  function initializeNeighborhoodSelect() {
-    const neighborhoodSelect = document.getElementById("neighborhoodSelect");
-    if (!window.getAvailableNeighborhoods) return;
-    
-    const neighborhoods = window.getAvailableNeighborhoods();
-    neighborhoods.forEach(({type, label}) => {
-      const option = document.createElement('option');
-      option.value = type;
-      option.textContent = label;
-      neighborhoodSelect.appendChild(option);
-    });
-    
-    // Initialize rules for the default neighborhood
-    if (neighborhoods.length > 0) {
-      initializeRuleSelect(neighborhoods[0].type);
-    }
-  }
-
-  /**
-   * Initialize rule dropdown for a given neighborhood type
-   */
-  function initializeRuleSelect(neighborhoodType) {
-    const ruleSelect = document.getElementById("ruleSelect");
-    if (!window.getAvailableRulesForNeighborhood) return;
-    
-    ruleSelect.innerHTML = '';
-    const rules = window.getAvailableRulesForNeighborhood(neighborhoodType);
-    rules.forEach(({key, label}) => {
-      const option = document.createElement('option');
-      option.value = key;
-      option.textContent = label;
-      ruleSelect.appendChild(option);
-    });
-  }
-
-  function handleNeighborhoodChange() {
-    const neighborhoodSelect = document.getElementById("neighborhoodSelect");
-    initializeRuleSelect(neighborhoodSelect.value);
-    if (window.switchNeighborhoodType) {
-      window.switchNeighborhoodType(neighborhoodSelect.value);
-    }
-  }
-
-  function handleRuleChange() {
-    const ruleSelect = document.getElementById("ruleSelect");
-    if (window.switchRule) {
-      window.switchRule(ruleSelect.value);
-    }
-  }
-</script>
 
 </html>
