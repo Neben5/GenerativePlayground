@@ -1,6 +1,9 @@
 import * as paper from "paper";
 import { Vector } from "@geometric/vector";
-import { CellSpace, Cell, states } from "./Cells";
+import { CellSpace, Cell } from "./Cells";
+import { CARule, NeighborhoodType, NEIGHBORHOOD_METADATA } from "./CARule";
+import { Rule110 } from "./Rule110";
+import { SandRule } from "./SandRule";
 
 var POSSIBLESTATES = 2;
 var DIMENSIONORDERS = [8, 2];
@@ -8,156 +11,6 @@ var TICKRATE = 60;
 var STOP = true;
 
 var tickLoopIntervalId: NodeJS.Timeout = null;
-
-//* NEIGHBORHOOD AND RULE SYSTEM *//
-
-/**
- * Types of neighborhoods available in the system
- */
-enum NeighborhoodType {
-  ELEMENTARY = "elementary",  // 1D: left, center, right
-  MOORE = "moore",            // 2D: 3x3 square
-}
-
-/**
- * Metadata for neighborhoods: labels and descriptions
- */
-const NEIGHBORHOOD_METADATA: {[key in NeighborhoodType]: {label: string; description: string; neighborhoodSize: number}} = {
-  [NeighborhoodType.MOORE]: {
-    label: "Moore (3×3)",
-    description: "2D neighborhood with 8 adjacent cells in a square pattern",
-    neighborhoodSize: 9,
-  },
-  [NeighborhoodType.ELEMENTARY]: {
-    label: "Elementary (1D)",
-    description: "1D neighborhood with left and right neighbors",
-    neighborhoodSize: 3,
-  },
-};
-
-/**
- * Abstract base class for cellular automata rules.
- * Each rule defines its own neighborhood type and boundary handling.
- */
-abstract class CARule {
-  abstract name: string;
-  abstract neighborhoodType: NeighborhoodType;
-  /**
-   * Apply the rule to compute the next state.
-   * Rules are responsible for querying the cellSpace and handling boundaries.
-   */
-  abstract apply(cellSpace: CellSpace, position: Vector): number;
-}
-
-/**
- * Wolfram's Rule 110 - Elementary CA
- * Works with 1D neighborhoods (left, center, right)
- * Boundary: cells outside grid are treated as EMPTY (0)
- */
-class Rule110 extends CARule {
-  name = "Rule 110";
-  neighborhoodType = NeighborhoodType.ELEMENTARY;
-
-  apply(cellSpace: CellSpace, position: Vector): number {
-    const left = this.getNeighbor(cellSpace, position, -1).state;
-    const center = this.getNeighbor(cellSpace, position, 0).state;
-    const right = this.getNeighbor(cellSpace, position, 1).state;
-    
-    // Wolfram Rule 110 lookup table
-    const pattern = (left << 2) | (center << 1) | right;
-    const lut = [0, 1, 1, 1, 0, 1, 1, 0]; // Rule 110 in binary: 01101110
-    return lut[pattern];
-  }
-
-  private getNeighbor(cellSpace: CellSpace, position: Vector, offset: number): Cell {
-    const nx = position[1] + offset;
-    
-    if (nx < 0 || nx >= cellSpace.dimensionOrders[0]) {
-      // Boundary: return empty cell
-      return new Cell(states.EMPTY);
-    }
-    return cellSpace.getCellAtIndex(cellSpace.getIndex(new Vector(position[0], nx)));
-  }
-}
-/**
- * Sand physics rule - works with 3x3 Moore neighborhoods
- * Boundary: cells outside grid are treated as ROCK (solid walls)
- */
-class SandRule extends CARule {
-  name = "Sand Physics";
-  neighborhoodType = NeighborhoodType.MOORE;
-  debug = {
-    iteration: false,
-  };
-  apply(cellSpace: CellSpace, position: Vector): number {
-    const self = this.getNeighbor(cellSpace, position, 0, 0).state;
-    const up = this.getNeighbor(cellSpace, position, -1, 0).state;
-    const upLeft = this.getNeighbor(cellSpace, position, -1, -1).state;
-    const upRight = this.getNeighbor(cellSpace, position, -1, 1).state;
-    const left = this.getNeighbor(cellSpace, position, 0, -1).state;
-    const right = this.getNeighbor(cellSpace, position, 0, 1).state;
-    const down = this.getNeighbor(cellSpace, position, 1, 0).state;
-    const downLeft = this.getNeighbor(cellSpace, position, 1, -1).state;
-    const downRight = this.getNeighbor(cellSpace, position, 1, 1).state;
-    if(this.debug.iteration)
-    console.log(`Neighborhood states at position ${position}: \n\
-      ${upLeft} ${up} ${upRight} :  (${position[0]-1}, ${position[1]-1})  (${position[0]}, ${position[1]-1})  (${position[0]+1}, ${position[1]-1}) \n\
-      ${left} ${self} ${right} : (${position[0]-1}, ${position[1]})  (${position[0]}, ${position[1]})  (${position[0]+1}, ${position[1]}) \n\
-      ${downLeft} ${down} ${downRight} : (${position[0]-1}, ${position[1]+1})  (${position[0]}, ${position[1]+1})  (${position[0]+1}, ${position[1]+1}) \n`);
-
-    switch (self) {
-      case states.EMPTY:
-        if (up == states.SAND) {
-          return states.SAND;
-        }
-        if (upRight == states.SAND && right != states.EMPTY && up == states.EMPTY) {
-          return states.SAND;
-        }
-        if (left == states.COMPACTED_SAND && upLeft == states.SAND && downLeft != states.EMPTY) {
-          return states.SAND;
-        }
-        return states.EMPTY;
-      case states.SAND:
-        if (down == states.EMPTY) {
-          return states.EMPTY;
-        }
-        if (downLeft == states.EMPTY && left == states.EMPTY) {
-          return states.EMPTY;
-        }
-        if (down && (up == states.SAND || up == states.COMPACTED_SAND)) {
-          return states.COMPACTED_SAND;
-        }
-        if (down == states.COMPACTED_SAND && right == states.EMPTY && downRight == states.EMPTY) {
-          return states.EMPTY;
-        }
-        return states.SAND;
-      case states.COMPACTED_SAND:
-        if (down == states.EMPTY) {
-          return states.SAND;
-        }
-        if (down == states.SAND) {
-          return states.SAND;
-        }
-        if (up == states.EMPTY || up == states.ROCK) {
-          return states.SAND;
-        }
-        return states.COMPACTED_SAND;
-      case states.ROCK:
-        return states.ROCK;
-    }
-  }
-
-  private getNeighbor(cellSpace: CellSpace, position: Vector, dy: number, dx: number): Cell {
-    const ny = position[0] + dy;
-    const nx = position[1] + dx;
-    
-    if (nx < 0 || nx >= cellSpace.dimensionOrders[0] || ny < 0 || ny >= cellSpace.dimensionOrders[1]) {
-      // Boundary: return rock (solid wall)
-      return new Cell(states.ROCK);
-    }
-    return cellSpace.getCellAtIndex(cellSpace.getIndex(new Vector(ny, nx)));
-  }
-}
 
 class CanvasSpace {
   boundingRect: paper.Rectangle;
@@ -196,16 +49,9 @@ class CanvasSpace {
           size
         );
         aRect.strokeColor = new paper.Color("grey");
-        const fillColor = (() => {
-          switch (state) {
-            case states.EMPTY: return new paper.Color("white");
-            case states.SAND: return new paper.Color("#f5c264");
-            case states.COMPACTED_SAND: return new paper.Color("#bc7b3aff");
-            case states.ROCK: return new paper.Color("grey");
-            default: return new paper.Color("black");
-          }
-        })();
-        aRect.fillColor = fillColor;
+        // Use the rule's getColor method to determine the display color
+        const colorString = ca.currentRule.getColor(state);
+        aRect.fillColor = new paper.Color(colorString);
       }
     }
     paper.project.activeLayer.fitBounds(paper.view.bounds);
@@ -226,7 +72,7 @@ class CA {
   cellSpace: CellSpace;
   currentRule: CARule;
   currentNeighborhoodType: NeighborhoodType;
-  
+
   // Reusable state arrays to avoid allocations during iteration
   private stateBuffer1: number[];
   private stateBuffer2: number[];
@@ -252,14 +98,14 @@ class CA {
     this.currentNeighborhoodType = neighborhoodType || NeighborhoodType.MOORE;
     // Default to Sand rule if not provided
     this.currentRule = rule || new SandRule();
-    
+
     // Allocate state buffers once
     const bufferSize = this.cellSpace.cells.length;
     this.stateBuffer1 = new Array(bufferSize);
     this.stateBuffer2 = new Array(bufferSize);
     this.currentStateBuffer = this.stateBuffer1;
     this.nextStateBuffer = this.stateBuffer2;
-    
+
     // Initialize cached neighborhood array with correct size
     this.resizeCachedNeighborhood(this.currentNeighborhoodType);
   }
@@ -292,8 +138,8 @@ class CA {
   public getNextState(index: number): number {
     const position = this.cellSpace.getPosition(index);
     const ret = this.currentRule.apply(this.cellSpace, position);
-    if(this.debug.iteration)
-    console.log(`Computed next state for cell with rule ${this.currentRule.name} at index ${index} (position ${position}): ${ret}`);
+    if (this.debug.iteration)
+      console.log(`Computed next state for cell with rule ${this.currentRule.name} at index ${index} (position ${position}): ${ret}`);
     return ret;
   }
 
@@ -347,14 +193,14 @@ const ruleRegistry = {
 /**
  * Get all available rules for a given neighborhood type
  */
-function getRulesForNeighborhood(neighborhoodType: NeighborhoodType): {[key: string]: CARule} {
+function getRulesForNeighborhood(neighborhoodType: NeighborhoodType): { [key: string]: CARule } {
   return ruleRegistry[neighborhoodType] || {};
 }
 
 /**
  * Get all available neighborhood types
  */
-export function getAvailableNeighborhoods(): Array<{type: NeighborhoodType; label: string}> {
+export function getAvailableNeighborhoods(): Array<{ type: NeighborhoodType; label: string }> {
   return Object.values(NeighborhoodType).map(type => ({
     type,
     label: NEIGHBORHOOD_METADATA[type].label,
@@ -364,7 +210,7 @@ export function getAvailableNeighborhoods(): Array<{type: NeighborhoodType; labe
 /**
  * Get all available rules for a neighborhood type, as key-label pairs
  */
-export function getAvailableRulesForNeighborhood(neighborhoodType: NeighborhoodType): Array<{key: string; label: string}> {
+export function getAvailableRulesForNeighborhood(neighborhoodType: NeighborhoodType): Array<{ key: string; label: string }> {
   const rules = getRulesForNeighborhood(neighborhoodType);
   return Object.entries(rules).map(([key, rule]) => ({
     key,
@@ -385,13 +231,13 @@ export function getCurrentNeighborhoodType(): NeighborhoodType {
 export function getCurrentRuleName(): string {
   const currentRule = ca.currentRule;
   const rules = getRulesForNeighborhood(ca.currentNeighborhoodType);
-  
+
   for (const [key, rule] of Object.entries(rules)) {
     if (rule.constructor === currentRule.constructor) {
       return key;
     }
   }
-  
+
   // Fallback if no match found
   return Object.keys(rules)[0] || "";
 }
@@ -401,7 +247,7 @@ export function entry() {
   paper.setup("myCanvas");
   ca = new CA(DIMENSIONORDERS[0], DIMENSIONORDERS[1], paper.view.bounds);
   ca.redraw();
-  
+
   // Initialize stop button state to match STOP variable
   updateStopButtonState();
   return ca;
@@ -531,12 +377,12 @@ export function switchRule(ruleKey: string) {
 export function updateRuleOptions(neighborhoodType: NeighborhoodType) {
   const rulesForNeighborhood = getRulesForNeighborhood(neighborhoodType);
   const ruleSelect = document.getElementById('ruleSelect') as HTMLSelectElement;
-  
+
   if (!ruleSelect) return;
-  
+
   // Clear existing options
   ruleSelect.innerHTML = '';
-  
+
   // Add new options
   for (const [key, rule] of Object.entries(rulesForNeighborhood)) {
     const option = document.createElement('option');

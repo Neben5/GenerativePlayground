@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", function (arg) {
   // Initialize the simulator
   (window as any).eca = eca.entry();
 
-  
+
   // Initialize all UI elements and event listeners
   ui.initializeUI();
 });

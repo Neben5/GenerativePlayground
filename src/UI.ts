@@ -48,10 +48,10 @@ function initializeNeighborhoodSelect() {
   // Set the dropdown to match the CA's current neighborhood type
   const currentNeighborhoodType = eca.getCurrentNeighborhoodType();
   neighborhoodSelect.value = currentNeighborhoodType;
-  
+
   // Initialize rules for the current neighborhood
   initializeRuleSelect(currentNeighborhoodType);
-  
+
   // Set the rule dropdown to match the CA's current rule
   const currentRuleName = eca.getCurrentRuleName();
   const ruleSelect = document.getElementById("ruleSelect") as HTMLSelectElement;
