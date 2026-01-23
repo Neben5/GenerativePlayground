@@ -167,10 +167,10 @@ class CA {
    */
   public canvasPointToCellPosition(point: paper.Point): Vector | null {
     const bounds = this.canvasSpace.boundingRect;
-    
+
     // Check if point is within canvas bounds
     if (point.x < bounds.left || point.x >= bounds.right ||
-        point.y < bounds.top || point.y >= bounds.bottom) {
+      point.y < bounds.top || point.y >= bounds.bottom) {
       return null;
     }
 
@@ -184,7 +184,7 @@ class CA {
 
     // Validate cell coordinates
     if (cellX < 0 || cellX >= this.canvasSpace.width_count ||
-        cellY < 0 || cellY >= this.canvasSpace.height_count) {
+      cellY < 0 || cellY >= this.canvasSpace.height_count) {
       return null;
     }
 
@@ -332,6 +332,11 @@ export function resizeEvent(event: Event) {
 export function keypressEvent(event: KeyboardEvent) {
   switch (event.key) {
     case " ": {
+      // Prevent spacebar from submitting forms when focused on buttons
+      if (event.target instanceof HTMLButtonElement ||
+        (event.target instanceof HTMLElement && event.target.tagName === 'INPUT' && (event.target as HTMLInputElement).type === 'submit')) {
+        event.preventDefault();
+      }
       tickAction();
       break;
     }
@@ -388,15 +393,31 @@ export function triggerTickRateChange() {
 
 export function submitEvent(event: Event) {
   event.preventDefault(); // Prevents the default page refresh
+  event.stopPropagation(); // Prevent event bubbling
+
+  // Remove focus from submit button to prevent spacebar from triggering it again
+  const submitButton = document.getElementById("submitButton") as HTMLInputElement;
+  if (submitButton) {
+    submitButton.blur();
+  } else {
+    console.error("submitButton not found");
+  }
   // Handle form data with JavaScript
   var height = parseInt((document.getElementById('height') as HTMLInputElement).value);
   var width = parseInt((document.getElementById('width') as HTMLInputElement).value);
 
+
+  const prevNeighborhood = ca?.currentNeighborhoodType;
+  const prevRule = ca?.currentRule;
+
+  initialConfig = (document.getElementById('initialConfig') as HTMLInputElement).value.split(',').map(Number);
   DIMENSIONORDERS = [width, height];
   ca = new CA(
     width,
     height,
-    paper.view.bounds
+    paper.view.bounds,
+    prevNeighborhood,  // Preserve neighborhood
+    prevRule           // Preserve rule
   );
   initialConfig = (document.getElementById('initialConfig') as HTMLInputElement).value.split(',').map(Number);
   ca.redraw();
