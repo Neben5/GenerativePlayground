@@ -3,7 +3,14 @@
  * Separates UI concerns from core cellular automaton logic
  */
 
+import * as paper from "paper";
 import * as eca from "./ECA";
+import { Vector } from "@geometric/vector";
+
+// Paintbrush state management
+let isPaintbrushActive: boolean = false;
+let currentPaintState: number = 0;
+let isPainting: boolean = false; // Track if mouse is currently down and painting
 
 /**
  * Initialize all UI elements and event listeners
@@ -12,6 +19,8 @@ export function initializeUI() {
   initializeNavigationHandlers();
   initializeSelectHandlers();
   initializeSimulationControls();
+  initializePaintbrushControls();
+  initializePaintbrushMouseHandlers();
 }
 
 /**
@@ -101,6 +110,8 @@ function handleNeighborhoodChange() {
   const value = neighborhoodSelect.value;
   initializeRuleSelect(value);
   eca.switchNeighborhoodType(value);
+  // Update paint state selector when neighborhood changes (rule may have changed)
+  updatePaintStateSelector();
 }
 
 /**
@@ -109,6 +120,8 @@ function handleNeighborhoodChange() {
 function handleRuleChange() {
   const ruleSelect = document.getElementById("ruleSelect") as HTMLSelectElement;
   eca.switchRule(ruleSelect.value);
+  // Update paint state selector when rule changes
+  updatePaintStateSelector();
 }
 
 /**
@@ -147,4 +160,119 @@ export function closeNav() {
   const canvas = document.getElementById("myCanvas");
   if (sidebar) sidebar.style.width = "0";
   if (canvas) (canvas as any).style.marginLeft = "0";
+}
+
+/**
+ * Initialize paintbrush UI controls (toggle and state selector)
+ */
+function initializePaintbrushControls() {
+  const paintbrushToggle = document.getElementById("paintbrushToggle") as HTMLInputElement;
+  const paintStateSelect = document.getElementById("paintStateSelect") as HTMLSelectElement;
+
+  if (paintbrushToggle) {
+    paintbrushToggle.addEventListener("change", handlePaintbrushToggle);
+  }
+
+  if (paintStateSelect) {
+    paintStateSelect.addEventListener("change", handlePaintStateChange);
+  }
+
+  // Initialize paint state selector with current rule's states
+  updatePaintStateSelector();
+}
+
+/**
+ * Update the paint state selector dropdown based on the current rule
+ */
+function updatePaintStateSelector() {
+  const paintStateSelect = document.getElementById("paintStateSelect") as HTMLSelectElement;
+  if (!paintStateSelect) return;
+
+  // Get current rule's available states
+  const currentRuleName = eca.getCurrentRuleName();
+  const currentNeighborhoodType = eca.getCurrentNeighborhoodType();
+  const rules = eca.getAvailableRulesForNeighborhood(currentNeighborhoodType);
+  const currentRule = rules.find(r => r.key === currentRuleName);
+  
+  if (!currentRule) return;
+
+  // Get the actual rule instance to call getAvailableStates()
+  // We need to access the rule registry - let's add a helper function in ECA
+  const availableStates = eca.getRuleAvailableStates(currentRuleName);
+  
+  paintStateSelect.innerHTML = "";
+  availableStates.forEach((state) => {
+    const option = document.createElement("option");
+    option.value = state.toString();
+    option.textContent = eca.getRuleStateLabel(currentRuleName, state);
+    paintStateSelect.appendChild(option);
+  });
+
+  // Set default to first state
+  if (availableStates.length > 0) {
+    currentPaintState = availableStates[0];
+    paintStateSelect.value = availableStates[0].toString();
+  }
+}
+
+/**
+ * Handle paintbrush toggle change
+ */
+function handlePaintbrushToggle() {
+  const paintbrushToggle = document.getElementById("paintbrushToggle") as HTMLInputElement;
+  isPaintbrushActive = paintbrushToggle.checked;
+
+  // Pause simulation when paintbrush is activated
+  if (isPaintbrushActive) {
+    // Check if simulation is running and pause it
+    const stopButton = document.getElementById("stopButton") as HTMLInputElement;
+    if (stopButton && !stopButton.checked) {
+      // Simulation is running, pause it
+      eca.toggleTickLoop();
+    }
+  }
+}
+
+/**
+ * Handle paint state selection change
+ */
+function handlePaintStateChange() {
+  const paintStateSelect = document.getElementById("paintStateSelect") as HTMLSelectElement;
+  if (paintStateSelect) {
+    currentPaintState = parseInt(paintStateSelect.value, 10);
+  }
+}
+
+/**
+ * Initialize Paper.js mouse event handlers for paintbrush
+ */
+function initializePaintbrushMouseHandlers() {
+  paper.view.onMouseDown = (event: paper.MouseEvent) => {
+    if (isPaintbrushActive) {
+      isPainting = true;
+      paintAtPoint(event.point);
+    }
+  };
+
+  paper.view.onMouseDrag = (event: paper.MouseEvent) => {
+    if (isPaintbrushActive && isPainting) {
+      paintAtPoint(event.point);
+    }
+  };
+
+  paper.view.onMouseUp = (event: paper.MouseEvent) => {
+    if (isPaintbrushActive) {
+      isPainting = false;
+    }
+  };
+}
+
+/**
+ * Paint at the given Paper.js point
+ */
+function paintAtPoint(point: paper.Point) {
+  const cellPosition = eca.canvasPointToCellPosition(point);
+  if (cellPosition !== null) {
+    eca.paintCell(cellPosition, currentPaintState);
+  }
 }

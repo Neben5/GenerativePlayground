@@ -106,4 +106,24 @@ export class SandRule extends CARule {
       default: return "black";
     }
   }
+
+  /**
+   * Get available states for SandRule (EMPTY, SAND, COMPACTED_SAND, ROCK)
+   */
+  getAvailableStates(): number[] {
+    return [SandStates.EMPTY, SandStates.SAND, SandStates.COMPACTED_SAND, SandStates.ROCK];
+  }
+
+  /**
+   * Get a human-readable label for a state value
+   */
+  getStateLabel(state: number): string {
+    switch (state) {
+      case SandStates.EMPTY: return "Empty (0)";
+      case SandStates.SAND: return "Sand (1)";
+      case SandStates.COMPACTED_SAND: return "Compacted Sand (2)";
+      case SandStates.ROCK: return "Rock (-1)";
+      default: return `State ${state}`;
+    }
+  }
 }

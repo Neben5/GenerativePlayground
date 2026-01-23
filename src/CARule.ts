@@ -44,4 +44,16 @@ export abstract class CARule {
    * Rules can define their own color schemes.
    */
   abstract getColor(state: number): string;
+
+  /**
+   * Get the available state values for this rule.
+   * Used by the paintbrush tool to determine which states can be painted.
+   */
+  abstract getAvailableStates(): number[];
+
+  /**
+   * Get a human-readable label for a given state value.
+   * Used by the paintbrush tool to display state options.
+   */
+  abstract getStateLabel(state: number): string;
 }

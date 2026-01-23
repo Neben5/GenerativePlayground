@@ -40,4 +40,18 @@ export class Rule110 extends CARule {
   getColor(state: number): string {
     return state === 0 ? "white" : "black";
   }
+
+  /**
+   * Get available states for Rule110 (binary: 0 and 1)
+   */
+  getAvailableStates(): number[] {
+    return [0, 1];
+  }
+
+  /**
+   * Get a human-readable label for a state value
+   */
+  getStateLabel(state: number): string {
+    return state === 0 ? "Off (0)" : "On (1)";
+  }
 }

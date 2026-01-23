@@ -148,6 +148,50 @@ class CA {
     return this.cellSpace.getCellAtIndex(this.cellSpace.getIndex(position));
   }
 
+  /**
+   * Paint a cell at the given position with the specified state.
+   * Bypasses rule application and directly sets the cell state.
+   */
+  public paintCell(position: Vector, state: number): void {
+    if (!this.cellSpace.getPositionIsValid(position)) {
+      return; // Invalid position, do nothing
+    }
+    const index = this.cellSpace.getIndex(position);
+    this.cellSpace.cells[index].state = state;
+    this.redraw();
+  }
+
+  /**
+   * Convert a Paper.js point (canvas coordinates) to a cell grid position.
+   * Returns null if the point is out of bounds.
+   */
+  public canvasPointToCellPosition(point: paper.Point): Vector | null {
+    const bounds = this.canvasSpace.boundingRect;
+    
+    // Check if point is within canvas bounds
+    if (point.x < bounds.left || point.x >= bounds.right ||
+        point.y < bounds.top || point.y >= bounds.bottom) {
+      return null;
+    }
+
+    // Calculate relative position within the canvas
+    const relativeX = point.x - bounds.left;
+    const relativeY = point.y - bounds.top;
+
+    // Convert to cell coordinates
+    const cellX = Math.floor(relativeX / this.canvasSpace.width_per_rectangle);
+    const cellY = Math.floor(relativeY / this.canvasSpace.height_per_rectangle);
+
+    // Validate cell coordinates
+    if (cellX < 0 || cellX >= this.canvasSpace.width_count ||
+        cellY < 0 || cellY >= this.canvasSpace.height_count) {
+      return null;
+    }
+
+    // Return as Vector (note: position format is [row, col] = [y, x] based on Cells.ts)
+    return new Vector(cellY, cellX);
+  }
+
   redraw() {
     this.canvasSpace.updateBounds(paper.view.bounds);
     this.canvasSpace.drawElements(this);
@@ -240,6 +284,32 @@ export function getCurrentRuleName(): string {
 
   // Fallback if no match found
   return Object.keys(rules)[0] || "";
+}
+
+/**
+ * Get available states for a rule by its key
+ */
+export function getRuleAvailableStates(ruleKey: string): number[] {
+  const currentNeighborhoodType = ca.currentNeighborhoodType;
+  const rules = getRulesForNeighborhood(currentNeighborhoodType);
+  const rule = rules[ruleKey];
+  if (rule) {
+    return rule.getAvailableStates();
+  }
+  return [];
+}
+
+/**
+ * Get state label for a rule by its key
+ */
+export function getRuleStateLabel(ruleKey: string, state: number): string {
+  const currentNeighborhoodType = ca.currentNeighborhoodType;
+  const rules = getRulesForNeighborhood(currentNeighborhoodType);
+  const rule = rules[ruleKey];
+  if (rule) {
+    return rule.getStateLabel(state);
+  }
+  return `State ${state}`;
 }
 
 export function entry() {
@@ -390,4 +460,25 @@ export function updateRuleOptions(neighborhoodType: NeighborhoodType) {
     option.textContent = rule.name;
     ruleSelect.appendChild(option);
   }
+}
+
+/**
+ * Paint a cell at the given position with the specified state.
+ * Exported wrapper for CA.paintCell()
+ */
+export function paintCell(position: Vector, state: number): void {
+  if (ca) {
+    ca.paintCell(position, state);
+  }
+}
+
+/**
+ * Convert a Paper.js point to a cell grid position.
+ * Exported wrapper for CA.canvasPointToCellPosition()
+ */
+export function canvasPointToCellPosition(point: paper.Point): Vector | null {
+  if (ca) {
+    return ca.canvasPointToCellPosition(point);
+  }
+  return null;
 }
