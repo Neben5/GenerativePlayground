@@ -66,7 +66,6 @@ class CanvasSpace {
    * Draw all cells using Canvas 2D fillRect - much faster than Paper.js
    */
   drawElements(ca: CA) {
-    console.log(`CanvasSpace#${this.caCount}.drawElements called`);
     // Clear canvas
     this.ctx.fillStyle = "white";
     this.ctx.fillRect(0, 0, this.canvasElement.width, this.canvasElement.height);
@@ -115,7 +114,7 @@ function getCanvasBounds(canvasElement: HTMLCanvasElement): Bounds {
 
 //* AUTOMATA *//
 
-class CA {
+export class CA {
   canvasSpace: CanvasSpace;
   cellSpace: CellSpace;
   currentRule: CARule;
@@ -165,14 +164,12 @@ class CA {
 
   public setNeighborhoodType(type: NeighborhoodType) {
     this.currentNeighborhoodType = type;
-    console.log(`Switched to neighborhood: ${type}`);
   }
 
   public setRule(rule: CARule) {
     // Only allow setting a rule if it matches the current neighborhood type
     if (rule.neighborhoodType === this.currentNeighborhoodType) {
       this.currentRule = rule;
-      console.log(`Switched to rule: ${rule.name}`);
     } else {
       console.error(
         `Cannot use ${rule.name} (${rule.neighborhoodType}) with ${this.currentNeighborhoodType} neighborhood`
@@ -401,7 +398,6 @@ export function entry() {
 
   const bounds = getCanvasBounds(canvasElement);
   ca = new CA(DIMENSIONORDERS[0], DIMENSIONORDERS[1], bounds, undefined, undefined, canvasElement);
-  console.log("Initialized CA instance:", ca.caCount);
   ca.redraw();
 
   // Initialize stop button state to match STOP variable
@@ -422,14 +418,12 @@ function startRenderLoop() {
     if (!STOP) {
       // Render only if dirty rects exist or full redraw needed
       if (ca.getDirtyRects().size > 0) {
-        console.log(`Rendering frame for CA#${ca.caCount} with ${ca.getDirtyRects().size} dirty rects`);
         ca.redraw();
         ca.clearDirty();
       }
     } else {
       // When stopped, still redraw if there are pending changes (e.g., from painting)
       if (ca.getDirtyRects().size > 0) {
-        console.log(`Rendering stopped frame for CA#${ca.caCount} with ${ca.getDirtyRects().size} dirty rects`);
         ca.redraw();
         ca.clearDirty();
       }
@@ -448,7 +442,6 @@ function startRenderLoop() {
 //* EVENT HANDLERS *//
 
 export function resizeEvent(event: Event) {
-  console.log("Resize event triggered on CA#", ca.caCount);
   ca.redraw();
 }
 
@@ -551,7 +544,6 @@ export function submitEvent(event: Event) {
     prevRule           // Preserve rule
   );
   initialConfig = (document.getElementById('initialConfig') as HTMLInputElement).value.split(',').map(Number);
-  console.log("Reinitialized CA instance:", ca.caCount);
   ca.redraw();
 }
 
@@ -634,4 +626,22 @@ export function canvasPointToCellPosition(coords: { x: number; y: number }): Vec
     return ca.canvasPointToCellPosition(coords);
   }
   return null;
+}
+/**
+ * Get the current CA instance for persistence operations
+ */
+export function getCurrentCA(): CA | null {
+  return ca;
+}
+
+export function setCurrentCA(newCA: CA): void {
+  ca = newCA;
+  ca.redraw();
+}
+
+/**
+ * Get the current tick count
+ */
+export function getTickCount(): number {
+  return tickLoopIntervalId ? 0 : 0; // TODO: Implement proper tick counting
 }

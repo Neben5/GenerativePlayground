@@ -64,6 +64,32 @@
       </select>
     </label>
   </div>
+  <hr>
+  <div>
+    <h3>Presets</h3>
+    <label for="presetSelect"> Load Preset:
+      <select id="presetSelect" name="presetSelect">
+        <option value="">-- Select a preset --</option>
+      </select>
+    </label>
+    <button type="button" id="loadPresetButton">Load</button>
+    <button type="button" id="deletePresetButton">Delete</button>
+    <br><br>
+    <label for="newPresetName"> Save as Preset:
+      <input type="text" id="newPresetName" placeholder="Preset name">
+    </label>
+    <input type="checkbox" id="includePatternCheckbox"> Include Pattern
+    <button type="button" id="savePresetButton">Save</button>
+  </div>
+  <hr>
+  <div>
+    <h3>Full State</h3>
+    <label for="stateName"> State Name:
+      <input type="text" id="stateName" placeholder="State name">
+    </label>
+    <button type="button" id="exportStateButton">Export State</button>
+    <button type="button" id="importStateButton">Import State</button>
+  </div>
 </div>
 
 </html>

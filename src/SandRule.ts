@@ -17,8 +17,11 @@ export enum SandStates {
  * Works with 3x3 Moore neighborhoods
  * Boundary: cells outside grid are treated as ROCK (solid walls)
  */
-export class SandRule extends CARule {
+export class SandRule implements CARule {
   name = "Sand Physics";
+  // dont want to deal with typical AbstractSingletonBeanFactory nonsense
+  static RuleName = "sand";
+  ruleName = "sand";
   neighborhoodType = NeighborhoodType.MOORE;
   debug = {
     iteration: false,

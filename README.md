@@ -64,7 +64,7 @@ A cellular automata playground for exploring rule-based simulations and emergent
 
 **Simulation:**
 - Multi-rule interactions
-- Temperature/energy transport
+- Temperature/energy transport (higher dimensional states)
 - Fluid mechanics
 - Chemical reactions
 

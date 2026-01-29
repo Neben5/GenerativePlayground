@@ -3,7 +3,9 @@
  * Separates UI concerns from core cellular automaton logic
  */
 
+import { NeighborhoodType } from "./CARule";
 import * as eca from "./ECA";
+import * as persistence from "./Persistence";
 import { Vector } from "@geometric/vector";
 
 // Paintbrush state management
@@ -26,11 +28,13 @@ function getCanvasCoordinates(canvasElement: HTMLCanvasElement, clientX: number,
  * Initialize all UI elements and event listeners
  */
 export function initializeUI() {
+  persistence.initializePresets();
   initializeNavigationHandlers();
   initializeSelectHandlers();
   initializeSimulationControls();
   initializePaintbrushControls();
   initializePaintbrushMouseHandlers();
+  initializePersistenceControls();
 }
 
 /**
@@ -203,13 +207,13 @@ function updatePaintStateSelector() {
   const currentNeighborhoodType = eca.getCurrentNeighborhoodType();
   const rules = eca.getAvailableRulesForNeighborhood(currentNeighborhoodType);
   const currentRule = rules.find(r => r.key === currentRuleName);
-  
+
   if (!currentRule) return;
 
   // Get the actual rule instance to call getAvailableStates()
   // We need to access the rule registry - let's add a helper function in ECA
   const availableStates = eca.getRuleAvailableStates(currentRuleName);
-  
+
   paintStateSelect.innerHTML = "";
   availableStates.forEach((state) => {
     const option = document.createElement("option");
@@ -304,3 +308,209 @@ function paintAtPoint(coords: { x: number; y: number }) {
     eca.paintCell(cellPosition, currentPaintState);
   }
 }
+
+/**
+ * Initialize persistence controls (presets and full state export/import)
+ */
+function initializePersistenceControls() {
+  // Populate preset dropdown
+  populatePresetDropdown();
+
+  // Preset controls
+  const loadPresetBtn = document.getElementById("loadPresetButton") as HTMLButtonElement;
+  const deletePresetBtn = document.getElementById("deletePresetButton") as HTMLButtonElement;
+  const savePresetBtn = document.getElementById("savePresetButton") as HTMLButtonElement;
+
+  if (loadPresetBtn) {
+    loadPresetBtn.addEventListener("click", () => {
+      const presetSelect = document.getElementById("presetSelect") as HTMLSelectElement;
+      const presetName = presetSelect?.value;
+      if (presetName) {
+        console.log("Loading preset:", presetName);
+        loadPreset(presetName);
+      } else {
+        alert("Please select a preset");
+      }
+    });
+  }
+
+  if (deletePresetBtn) {
+    deletePresetBtn.addEventListener("click", () => {
+      const presetSelect = document.getElementById("presetSelect") as HTMLSelectElement;
+      const presetName = presetSelect?.value;
+      if (presetName) {
+        if (confirm(`Delete preset "${presetName}"?`)) {
+          persistence.deletePreset(presetName);
+          populatePresetDropdown();
+          alert("Preset deleted");
+        }
+      } else {
+        alert("Please select a preset");
+      }
+    });
+  }
+
+  if (savePresetBtn) {
+    savePresetBtn.addEventListener("click", () => {
+      const presetName = (document.getElementById("newPresetName") as HTMLInputElement)?.value;
+      const includePattern = (document.getElementById("includePatternCheckbox") as HTMLInputElement)?.checked;
+
+      if (!presetName) {
+        alert("Please enter a preset name");
+        return;
+      }
+
+      const ca = eca.getCurrentCA();
+      if (!ca) {
+        alert("No CA instance available");
+        return;
+      }
+
+      const preset = persistence.createPresetFromCA(ca, presetName, includePattern);
+      persistence.savePreset(preset);
+      populatePresetDropdown();
+      (document.getElementById("newPresetName") as HTMLInputElement).value = "";
+      alert("Preset saved");
+    });
+  }
+
+  // Full state controls
+  const exportStateBtn = document.getElementById("exportStateButton") as HTMLButtonElement;
+  const importStateBtn = document.getElementById("importStateButton") as HTMLButtonElement;
+
+  if (exportStateBtn) {
+    exportStateBtn.addEventListener("click", () => {
+      const ca = eca.getCurrentCA();
+      if (!ca) {
+        alert("No CA instance available");
+        return;
+      }
+
+      const stateName = (document.getElementById("stateName") as HTMLInputElement)?.value || "ca-state";
+      const tickCount = eca.getTickCount?.() || 0;
+      const json = persistence.exportStateToJSON(ca, stateName, tickCount);
+      persistence.downloadStateFile(json, `${stateName}-${Date.now()}.json`);
+    });
+  }
+
+  if (importStateBtn) {
+    importStateBtn.addEventListener("click", async () => {
+      const jsonString = await persistence.uploadStateFile();
+      if (!jsonString) {
+        return;
+      }
+
+      const state = persistence.importStateFromJSON(jsonString);
+      if (!state) {
+        alert("Invalid state file");
+        return;
+      }
+
+      // Load the state
+      loadFullState(state);
+    });
+  }
+}
+
+/**
+ * Populate preset dropdown with saved presets
+ */
+function populatePresetDropdown() {
+  const presetSelect = document.getElementById("presetSelect") as HTMLSelectElement;
+  if (!presetSelect) return;
+
+  presetSelect.innerHTML = '<option value="">-- Select a preset --</option>';
+  const presets = persistence.getAllPresets();
+  presets.forEach((preset) => {
+    const option = document.createElement("option");
+    option.value = preset.name;
+    option.textContent = preset.name;
+    presetSelect.appendChild(option);
+  });
+}
+
+/**
+ * Load a preset and apply its configuration
+ */
+function loadPreset(presetName: string) {
+  const preset = persistence.getPreset(presetName);
+  console.log("Loading preset data:", preset);
+  if (!preset) {
+    alert("Preset not found");
+    return;
+  }
+
+  const initData = persistence.getPresetInitializationData(preset);
+
+  // Update form fields
+  (document.getElementById("width") as HTMLInputElement).value = initData.width.toString();
+  (document.getElementById("height") as HTMLInputElement).value = initData.height.toString();
+  (document.getElementById("initialConfig") as HTMLInputElement).value = initData.initialPattern;
+
+  // Update neighborhood dropdown and rebuild rules
+  const neighborhoodSelect = document.getElementById("neighborhoodSelect") as HTMLSelectElement;
+  if (neighborhoodSelect) {
+    neighborhoodSelect.value = preset.neighborhood;
+    // Directly rebuild rule select instead of dispatching event to avoid race condition
+    initializeRuleSelect(preset.neighborhood);
+    // Call neighborhood change handler logic
+    eca.switchNeighborhoodType(preset.neighborhood);
+    updatePaintStateSelector();
+  }
+
+  // Set rule value immediately (rules are now populated)
+  const ruleSelect = document.getElementById("ruleSelect") as HTMLSelectElement;
+  if (ruleSelect) {
+    ruleSelect.value = preset.rule;
+    // Trigger rule change handler
+    eca.switchRule(preset.rule);
+    updatePaintStateSelector();
+  }
+
+  // Submit to apply configuration
+  const submitButton = document.getElementById("submitButton") as HTMLInputElement;
+  if (submitButton) {
+    submitButton.click();
+  }
+}
+
+/**
+ * Load a full state and restore CA to that state
+ */
+function loadFullState(state: persistence.FullState) {
+  const initData = persistence.getStateInitializationData(state);
+
+  // Update form fields
+  (document.getElementById("width") as HTMLInputElement).value = initData.width.toString();
+  (document.getElementById("height") as HTMLInputElement).value = initData.height.toString();
+  (document.getElementById("initialConfig") as HTMLInputElement).value = initData.initialPattern;
+
+  // Update neighborhood dropdown and rebuild rules
+  const neighborhoodSelect = document.getElementById("neighborhoodSelect") as HTMLSelectElement;
+  if (neighborhoodSelect) {
+    neighborhoodSelect.value = state.neighborhood;
+    // Directly rebuild rule select instead of dispatching event to avoid race condition
+    initializeRuleSelect(state.neighborhood);
+    // Call neighborhood change handler logic
+    eca.switchNeighborhoodType(state.neighborhood);
+    updatePaintStateSelector();
+  }
+
+  // Set rule value immediately (rules are now populated)
+  const ruleSelect = document.getElementById("ruleSelect") as HTMLSelectElement;
+  if (ruleSelect) {
+    ruleSelect.value = state.rule;
+    // Trigger rule change handler
+    eca.switchRule(state.rule);
+    updatePaintStateSelector();
+  }
+
+  // Submit form to create CA with new configuration and initial cell states
+  const submitButton = document.getElementById("submitButton") as HTMLInputElement;
+  if (submitButton) {
+    submitButton.click();
+  }
+
+  alert(`State loaded: "${state.name}" (${state.tickCount} ticks)`);
+}
+

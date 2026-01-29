@@ -8,8 +8,11 @@ import { CARule, NeighborhoodType } from "./CARule";
  * Uses binary states (0 = white/off, 1 = black/on)
  * Boundary: cells outside grid are treated as 0 (off)
  */
-export class Rule110 extends CARule {
+export class Rule110 implements CARule {
   name = "Rule 110";
+  // dont want to deal with typical AbstractSingletonBeanFactory nonsense
+  static RuleName = "rule110";
+  ruleName = "rule110";
   neighborhoodType = NeighborhoodType.ELEMENTARY;
 
   apply(cellSpace: CellSpace, position: Vector): number {

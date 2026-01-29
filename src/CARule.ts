@@ -31,6 +31,7 @@ export const NEIGHBORHOOD_METADATA: { [key in NeighborhoodType]: { label: string
  */
 export abstract class CARule {
   abstract name: string;
+  abstract ruleName: string;
   abstract neighborhoodType: NeighborhoodType;
 
   /**
