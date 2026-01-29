@@ -1,4 +1,3 @@
-import * as paper from "paper";
 import { Vector } from "@geometric/vector";
 
 export enum states {

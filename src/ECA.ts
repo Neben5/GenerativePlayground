@@ -1,4 +1,3 @@
-import * as paper from "paper";
 import { Vector } from "@geometric/vector";
 import { CellSpace, Cell } from "./Cells";
 import { CARule, NeighborhoodType, NEIGHBORHOOD_METADATA } from "./CARule";
@@ -7,6 +6,14 @@ import { SandRule } from "./SandRule";
 import { FramerateMonitor } from "./FramerateMonitor";
 import { TickrateMonitor } from "./TickrateMonitor";
 
+// Simple Bounds interface to replace Paper.js Rectangle
+export interface Bounds {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+var caCount = 0;
 var POSSIBLESTATES = 2;
 var DIMENSIONORDERS = [8, 2];
 var TICKRATE = 60;
@@ -18,21 +25,21 @@ var framerateMonitor: FramerateMonitor = new FramerateMonitor(60); // Target 30 
 var tickrateMonitor: TickrateMonitor = new TickrateMonitor(0); // Track simulation tick rate
 
 class CanvasSpace {
-  boundingRect: paper.Rectangle;
+  boundingRect: Bounds;
   height_count: number;
   width_count: number;
   width_per_rectangle: number;
   height_per_rectangle: number;
   canvasElement: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
-
+  public caCount: number;
   constructor(
     height: number,
     width: number,
-    boundingRect: paper.Rectangle,
+    boundingRect: Bounds,
     canvasElement: HTMLCanvasElement
   ) {
-    console.log(`CanvasSpace{height: ${height}, width: ${width}, boundingRect: ${boundingRect}}`);
+    console.log(`CanvasSpace{height: ${height}, width: ${width}, boundingRect: ${JSON.stringify(boundingRect)}}`);
     this.boundingRect = boundingRect;
     this.height_count = height;
     this.width_count = width;
@@ -40,6 +47,16 @@ class CanvasSpace {
     this.height_per_rectangle = boundingRect.height / this.height_count;
     this.canvasElement = canvasElement;
     this.ctx = canvasElement.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = this.canvasElement.getBoundingClientRect();
+    this.caCount = caCount;
+    // Set logical size
+    this.canvasElement.width = rect.width * dpr;
+    this.canvasElement.height = rect.height * dpr;
+
+    // Scale context to match
+    this.ctx.imageSmoothingEnabled = false;
+    this.ctx.scale(dpr, dpr);
     if (!this.ctx) {
       throw new Error("Failed to get 2D context from canvas");
     }
@@ -49,6 +66,7 @@ class CanvasSpace {
    * Draw all cells using Canvas 2D fillRect - much faster than Paper.js
    */
   drawElements(ca: CA) {
+    console.log(`CanvasSpace#${this.caCount}.drawElements called`);
     // Clear canvas
     this.ctx.fillStyle = "white";
     this.ctx.fillRect(0, 0, this.canvasElement.width, this.canvasElement.height);
@@ -75,23 +93,23 @@ class CanvasSpace {
     }
   }
 
-  /**
-   * Draw only specific cells (dirty-rect optimization)
-   */
-  drawCells(ca: CA, cellPositions: Vector[]) {
-    // Clear canvas first
-    this.ctx.fillStyle = "white";
-    this.ctx.fillRect(0, 0, this.canvasElement.width, this.canvasElement.height);
-
-    // Redraw all cells (for now) - will optimize with dirty-rect in next iteration
-    this.drawElements(ca);
-  }
-
-  updateBounds(newBounds: paper.Rectangle) {
+  updateBounds(newBounds: Bounds) {
     this.boundingRect = newBounds;
     this.width_per_rectangle = newBounds.width / this.width_count;
     this.height_per_rectangle = newBounds.height / this.height_count;
   }
+}
+
+/**
+ * Get canvas bounds using native DOM API
+ */
+function getCanvasBounds(canvasElement: HTMLCanvasElement): Bounds {
+  return {
+    left: 0,
+    top: 0,
+    width: canvasElement.width,
+    height: canvasElement.height,
+  };
 }
 
 
@@ -102,7 +120,7 @@ class CA {
   cellSpace: CellSpace;
   currentRule: CARule;
   currentNeighborhoodType: NeighborhoodType;
-
+  public caCount: number = caCount++;
   // Reusable state arrays to avoid allocations during iteration
   private stateBuffer1: number[];
   private stateBuffer2: number[];
@@ -119,7 +137,7 @@ class CA {
   constructor(
     num_rectangles_wide: number,
     num_rectangles_tall: number,
-    boundingRect: paper.Rectangle,
+    boundingRect: Bounds,
     neighborhoodType?: NeighborhoodType,
     rule?: CARule,
     canvasElement?: HTMLCanvasElement
@@ -196,21 +214,22 @@ class CA {
   }
 
   /**
-   * Convert a Paper.js point (canvas coordinates) to a cell grid position.
+   * Convert canvas coordinates to a cell grid position.
+   * Accepts {x, y} coordinates in canvas space.
    * Returns null if the point is out of bounds.
    */
-  public canvasPointToCellPosition(point: paper.Point): Vector | null {
+  public canvasPointToCellPosition(coords: { x: number; y: number }): Vector | null {
     const bounds = this.canvasSpace.boundingRect;
 
     // Check if point is within canvas bounds
-    if (point.x < bounds.left || point.x >= bounds.right ||
-      point.y < bounds.top || point.y >= bounds.bottom) {
+    if (coords.x < bounds.left || coords.x >= bounds.left + bounds.width ||
+      coords.y < bounds.top || coords.y >= bounds.top + bounds.height) {
       return null;
     }
 
     // Calculate relative position within the canvas
-    const relativeX = point.x - bounds.left;
-    const relativeY = point.y - bounds.top;
+    const relativeX = coords.x - bounds.left;
+    const relativeY = coords.y - bounds.top;
 
     // Convert to cell coordinates
     const cellX = Math.floor(relativeX / this.canvasSpace.width_per_rectangle);
@@ -227,7 +246,8 @@ class CA {
   }
 
   redraw() {
-    this.canvasSpace.updateBounds(paper.view.bounds);
+    const bounds = getCanvasBounds(this.canvasSpace.canvasElement);
+    this.canvasSpace.updateBounds(bounds);
     this.canvasSpace.drawElements(this);
   }
 
@@ -373,9 +393,15 @@ export function getRuleStateLabel(ruleKey: string, state: number): string {
 }
 
 export function entry() {
-  // Not sure why this was necessary, but it was. Something to do with the way webpack handled linking the canvas to paper
-  paper.setup("myCanvas");
-  ca = new CA(DIMENSIONORDERS[0], DIMENSIONORDERS[1], paper.view.bounds);
+  const canvasElement = document.getElementById("myCanvas") as HTMLCanvasElement;
+  if (!canvasElement) {
+    console.error("Canvas element 'myCanvas' not found");
+    return null;
+  }
+
+  const bounds = getCanvasBounds(canvasElement);
+  ca = new CA(DIMENSIONORDERS[0], DIMENSIONORDERS[1], bounds, undefined, undefined, canvasElement);
+  console.log("Initialized CA instance:", ca.caCount);
   ca.redraw();
 
   // Initialize stop button state to match STOP variable
@@ -396,12 +422,14 @@ function startRenderLoop() {
     if (!STOP) {
       // Render only if dirty rects exist or full redraw needed
       if (ca.getDirtyRects().size > 0) {
+        console.log(`Rendering frame for CA#${ca.caCount} with ${ca.getDirtyRects().size} dirty rects`);
         ca.redraw();
         ca.clearDirty();
       }
     } else {
       // When stopped, still redraw if there are pending changes (e.g., from painting)
       if (ca.getDirtyRects().size > 0) {
+        console.log(`Rendering stopped frame for CA#${ca.caCount} with ${ca.getDirtyRects().size} dirty rects`);
         ca.redraw();
         ca.clearDirty();
       }
@@ -420,6 +448,7 @@ function startRenderLoop() {
 //* EVENT HANDLERS *//
 
 export function resizeEvent(event: Event) {
+  console.log("Resize event triggered on CA#", ca.caCount);
   ca.redraw();
 }
 
@@ -468,14 +497,16 @@ function updateStopButtonState() {
   const stopButton = document.getElementById("stopButton") as HTMLInputElement;
   if (stopButton) {
     stopButton.checked = STOP;
-    tickrateMonitor = new TickrateMonitor(STOP ? 0 : TICKRATE);
+    if (STOP) {
+      tickrateMonitor.reset(); // Show 0 TPS when paused
+    }
   }
 }
 
 export function triggerTickRateChange() {
   var tickrate = parseInt((document.getElementById('tickRate') as HTMLInputElement).value);
   TICKRATE = tickrate;
-  tickrateMonitor = new TickrateMonitor(STOP ? 0 : TICKRATE);
+  tickrateMonitor.setTargetTickRate(STOP ? 0 : TICKRATE);
   if (tickLoopIntervalId) {
     clearInterval(tickLoopIntervalId);
     tickLoopIntervalId = null;
@@ -508,14 +539,19 @@ export function submitEvent(event: Event) {
 
   initialConfig = (document.getElementById('initialConfig') as HTMLInputElement).value.split(',').map(Number);
   DIMENSIONORDERS = [width, height];
+
+  const canvasElement = document.getElementById("myCanvas") as HTMLCanvasElement;
+  const bounds = getCanvasBounds(canvasElement);
+
   ca = new CA(
     width,
     height,
-    paper.view.bounds,
+    bounds,
     prevNeighborhood,  // Preserve neighborhood
     prevRule           // Preserve rule
   );
   initialConfig = (document.getElementById('initialConfig') as HTMLInputElement).value.split(',').map(Number);
+  console.log("Reinitialized CA instance:", ca.caCount);
   ca.redraw();
 }
 
@@ -590,12 +626,12 @@ export function paintCell(position: Vector, state: number): void {
 }
 
 /**
- * Convert a Paper.js point to a cell grid position.
+ * Convert canvas coordinates to a cell grid position.
  * Exported wrapper for CA.canvasPointToCellPosition()
  */
-export function canvasPointToCellPosition(point: paper.Point): Vector | null {
+export function canvasPointToCellPosition(coords: { x: number; y: number }): Vector | null {
   if (ca) {
-    return ca.canvasPointToCellPosition(point);
+    return ca.canvasPointToCellPosition(coords);
   }
   return null;
 }

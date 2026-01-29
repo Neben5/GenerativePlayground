@@ -3,7 +3,6 @@
  * Separates UI concerns from core cellular automaton logic
  */
 
-import * as paper from "paper";
 import * as eca from "./ECA";
 import { Vector } from "@geometric/vector";
 
@@ -11,6 +10,17 @@ import { Vector } from "@geometric/vector";
 let isPaintbrushActive: boolean = false;
 let currentPaintState: number = 0;
 let isPainting: boolean = false; // Track if mouse is currently down and painting
+
+/**
+ * Convert client coordinates to canvas space coordinates
+ */
+function getCanvasCoordinates(canvasElement: HTMLCanvasElement, clientX: number, clientY: number): { x: number; y: number } {
+  const rect = canvasElement.getBoundingClientRect();
+  return {
+    x: clientX - rect.left,
+    y: clientY - rect.top
+  };
+}
 
 /**
  * Initialize all UI elements and event listeners
@@ -244,40 +254,52 @@ function handlePaintStateChange() {
 }
 
 /**
- * Initialize Paper.js mouse event handlers for paintbrush
+ * Initialize native canvas mouse event handlers for paintbrush
  */
 function initializePaintbrushMouseHandlers() {
-  paper.view.onMouseDown = (event: paper.MouseEvent) => {
+  const canvasElement = document.getElementById("myCanvas") as HTMLCanvasElement;
+  if (!canvasElement) {
+    console.error("Canvas element 'myCanvas' not found");
+    return;
+  }
+
+  canvasElement.addEventListener("mousedown", (event: MouseEvent) => {
     if (isPaintbrushActive) {
       isPainting = true;
-      paintAtPoint(event.point);
+      const coords = getCanvasCoordinates(canvasElement, event.clientX, event.clientY);
+      paintAtPoint(coords);
     }
-  };
+  });
 
-  paper.view.onMouseDrag = (event: paper.MouseEvent) => {
+  canvasElement.addEventListener("mousemove", (event: MouseEvent) => {
     if (isPaintbrushActive && isPainting) {
-      paintAtPoint(event.point);
+      const coords = getCanvasCoordinates(canvasElement, event.clientX, event.clientY);
+      paintAtPoint(coords);
       // NOTE: paintAtPoint now only marks cells as dirty, doesn't redraw
       // Redraw happens via requestAnimationFrame render loop
     }
-  };
+  });
 
-  paper.view.onMouseUp = (event: paper.MouseEvent) => {
+  canvasElement.addEventListener("mouseup", (event: MouseEvent) => {
     if (isPaintbrushActive) {
       isPainting = false;
       // Trigger final redraw when paint stroke completes
-      if ((window as any).eca) {
-        (window as any).eca.redraw();
-      }
+      eca.resizeEvent(new Event("mouseup")); // Reuse resizeEvent to trigger redraw
     }
-  };
+  });
+
+  canvasElement.addEventListener("mouseleave", (event: MouseEvent) => {
+    if (isPaintbrushActive) {
+      isPainting = false;
+    }
+  });
 }
 
 /**
- * Paint at the given Paper.js point
+ * Paint at the given canvas coordinates
  */
-function paintAtPoint(point: paper.Point) {
-  const cellPosition = eca.canvasPointToCellPosition(point);
+function paintAtPoint(coords: { x: number; y: number }) {
+  const cellPosition = eca.canvasPointToCellPosition(coords);
   if (cellPosition !== null) {
     eca.paintCell(cellPosition, currentPaintState);
   }
