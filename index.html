@@ -9,6 +9,8 @@
 
 <body>
   <button class="openbtn" onclick="openNav()">☰ Open Sidebar</button>
+  <div id="fpsDisplay" style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.7); color: #0f0; padding: 8px 12px; font-family: monospace; border-radius: 4px; z-index: 100;">FPS: 0</div>
+  <div id="tickrateDisplay" style="position: fixed; top: 35px; right: 10px; background: rgba(0,0,0,0.7); color: #0f0; padding: 8px 12px; font-family: monospace; border-radius: 4px; z-index: 100;">Ticks: 0/s</div>
   <div class="canvas-container">
     <canvas id="myCanvas" resize></canvas>
   </div>

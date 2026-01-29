@@ -4,6 +4,8 @@ import { CellSpace, Cell } from "./Cells";
 import { CARule, NeighborhoodType, NEIGHBORHOOD_METADATA } from "./CARule";
 import { Rule110 } from "./Rule110";
 import { SandRule } from "./SandRule";
+import { FramerateMonitor } from "./FramerateMonitor";
+import { TickrateMonitor } from "./TickrateMonitor";
 
 var POSSIBLESTATES = 2;
 var DIMENSIONORDERS = [8, 2];
@@ -11,6 +13,9 @@ var TICKRATE = 60;
 var STOP = true;
 
 var tickLoopIntervalId: NodeJS.Timeout = null;
+var renderLoopId: number = null; // requestAnimationFrame ID
+var framerateMonitor: FramerateMonitor = new FramerateMonitor(60); // Target 30 FPS for 100x100+ grids
+var tickrateMonitor: TickrateMonitor = new TickrateMonitor(0); // Track simulation tick rate
 
 class CanvasSpace {
   boundingRect: paper.Rectangle;
@@ -18,10 +23,14 @@ class CanvasSpace {
   width_count: number;
   width_per_rectangle: number;
   height_per_rectangle: number;
+  canvasElement: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+
   constructor(
     height: number,
     width: number,
-    boundingRect: paper.Rectangle
+    boundingRect: paper.Rectangle,
+    canvasElement: HTMLCanvasElement
   ) {
     console.log(`CanvasSpace{height: ${height}, width: ${width}, boundingRect: ${boundingRect}}`);
     this.boundingRect = boundingRect;
@@ -29,32 +38,53 @@ class CanvasSpace {
     this.width_count = width;
     this.width_per_rectangle = boundingRect.width / this.width_count;
     this.height_per_rectangle = boundingRect.height / this.height_count;
+    this.canvasElement = canvasElement;
+    this.ctx = canvasElement.getContext("2d");
+    if (!this.ctx) {
+      throw new Error("Failed to get 2D context from canvas");
+    }
   }
 
-
+  /**
+   * Draw all cells using Canvas 2D fillRect - much faster than Paper.js
+   */
   drawElements(ca: CA) {
-    paper.project.activeLayer.removeChildren();
+    // Clear canvas
+    this.ctx.fillStyle = "white";
+    this.ctx.fillRect(0, 0, this.canvasElement.width, this.canvasElement.height);
+
+    // Draw all cells
+    // column loop
     for (var j = 0; j < this.width_count; j++) {
+      // row loop
       for (var i = 0; i < this.height_count; i++) {
         var position = new Vector(i, j);
-        var idx = ca.cellSpace.getIndex(position);
         var state = ca.getCell(position).state;
-        var point = new paper.Point(
-          this.boundingRect.left + j * this.width_per_rectangle,
-          this.boundingRect.top + i * this.height_per_rectangle
-        );
-        var size = new paper.Size(this.width_per_rectangle, this.height_per_rectangle);
-        var aRect = new paper.Path.Rectangle(
-          point,
-          size
-        );
-        aRect.strokeColor = new paper.Color("grey");
-        // Use the rule's getColor method to determine the display color
+
+        const x = this.boundingRect.left + j * this.width_per_rectangle;
+        const y = this.boundingRect.top + i * this.height_per_rectangle;
+        const w = this.width_per_rectangle;
+        const h = this.height_per_rectangle;
+
+        // Draw cell fill
         const colorString = ca.currentRule.getColor(state);
-        aRect.fillColor = new paper.Color(colorString);
+        this.ctx.fillStyle = colorString;
+        this.ctx.fillRect(x, y, w, h);
+
       }
     }
-    paper.project.activeLayer.fitBounds(paper.view.bounds);
+  }
+
+  /**
+   * Draw only specific cells (dirty-rect optimization)
+   */
+  drawCells(ca: CA, cellPositions: Vector[]) {
+    // Clear canvas first
+    this.ctx.fillStyle = "white";
+    this.ctx.fillRect(0, 0, this.canvasElement.width, this.canvasElement.height);
+
+    // Redraw all cells (for now) - will optimize with dirty-rect in next iteration
+    this.drawElements(ca);
   }
 
   updateBounds(newBounds: paper.Rectangle) {
@@ -78,21 +108,29 @@ class CA {
   private stateBuffer2: number[];
   private currentStateBuffer: number[];
   private nextStateBuffer: number[];
+
+  // Dirty-rect tracking for optimization
+  private dirtyRects: Set<number> = new Set(); // Set of cell indices that changed
+
   debug = {
     iteration: false,
   };
+
   constructor(
     num_rectangles_wide: number,
     num_rectangles_tall: number,
     boundingRect: paper.Rectangle,
     neighborhoodType?: NeighborhoodType,
-    rule?: CARule
+    rule?: CARule,
+    canvasElement?: HTMLCanvasElement
   ) {
     this.cellSpace = CellSpace.createCellSpaceWithStartingValues(DIMENSIONORDERS, initialConfig);
+    const canvas = canvasElement || (document.getElementById("myCanvas") as HTMLCanvasElement);
     this.canvasSpace = new CanvasSpace(
       num_rectangles_tall,
       num_rectangles_wide,
-      boundingRect
+      boundingRect,
+      canvas
     );
     // Default to Moore neighborhood if not provided
     this.currentNeighborhoodType = neighborhoodType || NeighborhoodType.MOORE;
@@ -105,22 +143,11 @@ class CA {
     this.stateBuffer2 = new Array(bufferSize);
     this.currentStateBuffer = this.stateBuffer1;
     this.nextStateBuffer = this.stateBuffer2;
-
-    // Initialize cached neighborhood array with correct size
-    this.resizeCachedNeighborhood(this.currentNeighborhoodType);
   }
 
   public setNeighborhoodType(type: NeighborhoodType) {
     this.currentNeighborhoodType = type;
-    this.resizeCachedNeighborhood(type);
     console.log(`Switched to neighborhood: ${type}`);
-  }
-
-  /**
-   * Resize the cached neighborhood array based on neighborhood type
-   */
-  private resizeCachedNeighborhood(neighborhoodType: NeighborhoodType) {
-    const requiredSize = NEIGHBORHOOD_METADATA[neighborhoodType].neighborhoodSize;
   }
 
   public setRule(rule: CARule) {
@@ -144,6 +171,11 @@ class CA {
   }
 
 
+  /**
+   * Get a cell at the given position.
+   * @param position matrix-space (col, row) coordinate
+   * @returns Cell at (position.0, position.1)
+   */
   public getCell(position: Vector): Cell {
     return this.cellSpace.getCellAtIndex(this.cellSpace.getIndex(position));
   }
@@ -152,13 +184,15 @@ class CA {
    * Paint a cell at the given position with the specified state.
    * Bypasses rule application and directly sets the cell state.
    */
-  public paintCell(position: Vector, state: number): void {
+  public scuffCell(position: Vector, state: number): void {
     if (!this.cellSpace.getPositionIsValid(position)) {
       return; // Invalid position, do nothing
     }
     const index = this.cellSpace.getIndex(position);
-    this.cellSpace.cells[index].state = state;
-    this.redraw();
+    if (this.cellSpace.cells[index].state !== state) {
+      this.cellSpace.cells[index].state = state;
+      this.markDirty(index);
+    }
   }
 
   /**
@@ -197,21 +231,47 @@ class CA {
     this.canvasSpace.drawElements(this);
   }
 
+  /**
+   * Mark a cell as dirty (changed)
+   */
+  public markDirty(index: number): void {
+    this.dirtyRects.add(index);
+  }
+
+  /**
+   * Clear all dirty rects
+   */
+  public clearDirty(): void {
+    this.dirtyRects.clear();
+  }
+
+  /**
+   * Get set of dirty cell indices
+   */
+  public getDirtyRects(): Set<number> {
+    return this.dirtyRects;
+  }
+
   iterate() {
     // Compute next states into the next state buffer
     for (let i = 0; i < this.cellSpace.cells.length; i++) {
       this.nextStateBuffer[i] = this.getNextState(i);
     }
-    // Update cells with computed states
+    // Update cells with computed states and track changes
     for (let i = 0; i < this.cellSpace.cells.length; i++) {
-      this.cellSpace.cells[i].state = this.nextStateBuffer[i];
+      if (this.cellSpace.cells[i].state !== this.nextStateBuffer[i]) {
+        this.cellSpace.cells[i].state = this.nextStateBuffer[i];
+        this.markDirty(i);
+      }
     }
     // Swap buffers for next iteration (no allocation)
     const temp = this.currentStateBuffer;
     this.currentStateBuffer = this.nextStateBuffer;
     this.nextStateBuffer = temp;
-    console.log(this.cellSpace.cells.map((cell) => cell.state));
-    console.log(`Iterated`);
+    if (this.debug.iteration) {
+      console.log(this.cellSpace.cells.map((cell) => cell.state));
+      console.log(`Iterated`);
+    }
   }
 
 
@@ -320,7 +380,41 @@ export function entry() {
 
   // Initialize stop button state to match STOP variable
   updateStopButtonState();
+
+  // Start render loop with requestAnimationFrame
+  startRenderLoop();
+
   return ca;
+}
+
+/**
+ * Start the render loop using requestAnimationFrame
+ * This decouples rendering from simulation for better performance
+ */
+function startRenderLoop() {
+  function renderFrame() {
+    if (!STOP) {
+      // Render only if dirty rects exist or full redraw needed
+      if (ca.getDirtyRects().size > 0) {
+        ca.redraw();
+        ca.clearDirty();
+      }
+    } else {
+      // When stopped, still redraw if there are pending changes (e.g., from painting)
+      if (ca.getDirtyRects().size > 0) {
+        ca.redraw();
+        ca.clearDirty();
+      }
+    }
+
+    // Track framerate
+    framerateMonitor.tick();
+
+    // Schedule next frame
+    renderLoopId = requestAnimationFrame(renderFrame);
+  }
+
+  renderLoopId = requestAnimationFrame(renderFrame);
 }
 
 //* EVENT HANDLERS *//
@@ -348,7 +442,8 @@ export function keypressEvent(event: KeyboardEvent) {
 
 function tickAction() {
   ca.iterate();
-  ca.redraw();
+  tickrateMonitor.tick();
+  // Note: rendering is now completely decoupled and happens in the requestAnimationFrame render loop
 }
 
 export function toggleTickLoop() {
@@ -373,13 +468,14 @@ function updateStopButtonState() {
   const stopButton = document.getElementById("stopButton") as HTMLInputElement;
   if (stopButton) {
     stopButton.checked = STOP;
+    tickrateMonitor = new TickrateMonitor(STOP ? 0 : TICKRATE);
   }
 }
 
 export function triggerTickRateChange() {
   var tickrate = parseInt((document.getElementById('tickRate') as HTMLInputElement).value);
   TICKRATE = tickrate;
-
+  tickrateMonitor = new TickrateMonitor(STOP ? 0 : TICKRATE);
   if (tickLoopIntervalId) {
     clearInterval(tickLoopIntervalId);
     tickLoopIntervalId = null;
@@ -489,7 +585,7 @@ export function updateRuleOptions(neighborhoodType: NeighborhoodType) {
  */
 export function paintCell(position: Vector, state: number): void {
   if (ca) {
-    ca.paintCell(position, state);
+    ca.scuffCell(position, state);
   }
 }
 

@@ -257,12 +257,18 @@ function initializePaintbrushMouseHandlers() {
   paper.view.onMouseDrag = (event: paper.MouseEvent) => {
     if (isPaintbrushActive && isPainting) {
       paintAtPoint(event.point);
+      // NOTE: paintAtPoint now only marks cells as dirty, doesn't redraw
+      // Redraw happens via requestAnimationFrame render loop
     }
   };
 
   paper.view.onMouseUp = (event: paper.MouseEvent) => {
     if (isPaintbrushActive) {
       isPainting = false;
+      // Trigger final redraw when paint stroke completes
+      if ((window as any).eca) {
+        (window as any).eca.redraw();
+      }
     }
   };
 }

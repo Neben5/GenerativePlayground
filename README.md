@@ -17,16 +17,14 @@ A cellular automata playground for exploring rule-based simulations and emergent
 | Neighborhood-Rule Matching | Switch between Elementary (1D) and Moore (3×3) neighborhoods with rule-specific implementations |
 | Wolfram's Rule 110 | Elementary cellular automaton with binary state visualization |
 | Sand Physics | 2D particle simulation with gravity and compaction |
-| Real-time UI Updates | Rule and neighborhood dropdowns with dynamic compatibility enforcement |
 | Simulation Control | Play/pause with tick rate adjustment (0-255 Hz) |
 | Grid Configuration | Configurable dimensions and initial cell states |
+| Paintbrush tool | Paintable states on the canvas |
 
 ### In Progress
 
-- Paintbrush tool for interactive state painting
 - Additional rule implementations (Langton's Ant, Game of Life)
 - Grid state persistence (save/load)
-- Frame-by-frame stepping
 
 ## Architecture
 
@@ -49,14 +47,13 @@ A cellular automata playground for exploring rule-based simulations and emergent
 1. Select a neighborhood type (Elementary or Moore)
 2. Choose a rule compatible with the selected neighborhood
 3. Configure grid dimensions and initial state
-4. Control simulation playback and speed
+4. Control simulation playback and speed (or tick manually with spacebar)
 5. Observe pattern evolution
 
 ## Roadmap
 
 | Priority | Item | Rationale |
 |----------|------|-----------|
-| High | Paintbrush tool | Enables interactive pattern creation |
 | High | Additional rules | Tests rule system extensibility |
 | High | State persistence | Required for workflow continuity |
 | Medium | Zoom/pan | Necessary for large grids |
