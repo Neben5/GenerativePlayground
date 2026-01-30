@@ -479,8 +479,8 @@ export function toggleTickLoop() {
     tickLoopIntervalId = setInterval(tickAction, ts);
     console.log(`tickloop at ${TICKRATE} / every ${ts}ms`);
   }
-  // Sync checkbox state with actual state
-  updateStopButtonState();
+  // Emit update event so UI can sync
+  try { window.dispatchEvent(new CustomEvent('eca:updated')); } catch (e) { }
 }
 
 /**
@@ -497,8 +497,19 @@ function updateStopButtonState() {
 }
 
 export function triggerTickRateChange() {
-  var tickrate = parseInt((document.getElementById('tickRate') as HTMLInputElement).value);
-  TICKRATE = tickrate;
+  // Backwards-compatible: if called with no args, read DOM (legacy)
+
+  const tickRateInput = document.getElementById('tickRate') as HTMLInputElement;
+  if(!tickRateInput) return;
+
+  const tickrate = tickRateInput ? parseInt(tickRateInput.value) : TICKRATE;
+  return setTickRate(tickrate);
+
+
+}
+
+export function setTickRate(newRate: number) {
+  TICKRATE = newRate;
   tickrateMonitor.setTargetTickRate(STOP ? 0 : TICKRATE);
   if (tickLoopIntervalId) {
     clearInterval(tickLoopIntervalId);
@@ -508,6 +519,19 @@ export function triggerTickRateChange() {
     const ts = 1000.0 / TICKRATE;
     tickLoopIntervalId = setInterval(tickAction, ts);
   }
+  try { window.dispatchEvent(new CustomEvent('eca:updated')); } catch (e) { }
+}
+
+export function getTickRate(): number {
+  return TICKRATE;
+}
+
+export function isRunning(): boolean {
+  return !STOP;
+}
+
+export function getTickCount(): number {
+  return tickrateMonitor.getTickCount();
 }
 
 
@@ -545,6 +569,9 @@ export function submitEvent(event: Event) {
   );
   initialConfig = (document.getElementById('initialConfig') as HTMLInputElement).value.split(',').map(Number);
   ca.redraw();
+  try {
+    window.dispatchEvent(new CustomEvent('eca:created'));
+  } catch (e) { }
 }
 
 /**
@@ -559,13 +586,13 @@ export function switchNeighborhoodType(neighborhoodType: string) {
     const firstRuleKey = Object.keys(rulesForNeighborhood)[0];
     if (firstRuleKey) {
       ca.setRule(rulesForNeighborhood[firstRuleKey]);
-      // Update UI to reflect the rule change
-      const ruleSelect = document.getElementById('ruleSelect') as HTMLSelectElement;
-      if (ruleSelect) {
-        ruleSelect.value = firstRuleKey;
-      }
     }
-    updateRuleOptions(type);
+    // Emit an event so UI can update itself (avoids direct DOM manipulation here)
+    try {
+      window.dispatchEvent(new CustomEvent('eca:updated'));
+    } catch (e) {
+      // ignore in non-browser contexts
+    }
     console.log(`Switched to neighborhood: ${type}`);
   } else {
     console.error(`Unknown neighborhood type: ${neighborhoodType}`);
@@ -581,6 +608,9 @@ export function switchRule(ruleKey: string) {
   if (rule) {
     ca.setRule(rule);
     console.log(`Switched to rule: ${rule.name}`);
+    try {
+      window.dispatchEvent(new CustomEvent('eca:updated'));
+    } catch (e) { }
   } else {
     console.error(`Rule ${ruleKey} not found for neighborhood ${ca.currentNeighborhoodType}`);
   }
@@ -637,11 +667,8 @@ export function getCurrentCA(): CA | null {
 export function setCurrentCA(newCA: CA): void {
   ca = newCA;
   ca.redraw();
+  try {
+    window.dispatchEvent(new CustomEvent('eca:created'));
+  } catch (e) { }
 }
 
-/**
- * Get the current tick count
- */
-export function getTickCount(): number {
-  return tickLoopIntervalId ? 0 : 0; // TODO: Implement proper tick counting
-}

@@ -90,6 +90,13 @@ export class TickrateMonitor {
   }
 
   /**
+   * Get current tick count value
+   */
+  public getTickCount(): number {
+    return this.tickCount;
+  }
+
+  /**
    * Reset the tick rate metrics
    */
   public reset(): void {

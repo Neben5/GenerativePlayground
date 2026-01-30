@@ -35,6 +35,47 @@ export function initializeUI() {
   initializePaintbrushControls();
   initializePaintbrushMouseHandlers();
   initializePersistenceControls();
+  // Listen for ECA events to synchronize UI when CA is created/updated
+  try {
+    window.addEventListener('eca:created', () => syncUIWithCA());
+    window.addEventListener('eca:updated', () => syncUIWithCA());
+  } catch (e) {}
+  // Initial sync
+  syncUIWithCA();
+}
+
+/**
+ * Synchronize UI controls with current CA state
+ */
+export function syncUIWithCA() {
+  const ca = eca.getCurrentCA();
+  if (!ca) return;
+
+  // Neighborhood
+  const neighborhoodSelect = document.getElementById("neighborhoodSelect") as HTMLSelectElement;
+  if (neighborhoodSelect) {
+    neighborhoodSelect.value = eca.getCurrentNeighborhoodType();
+    // Rebuild rules for the neighborhood
+    initializeRuleSelect(neighborhoodSelect.value);
+  }
+
+  // Rule
+  const ruleSelect = document.getElementById("ruleSelect") as HTMLSelectElement;
+  if (ruleSelect) {
+    ruleSelect.value = eca.getCurrentRuleName();
+  }
+
+  // Paint state selector
+  updatePaintStateSelector();
+  // Tick rate and running state
+  const tickRateInput = document.getElementById("tickRate") as HTMLInputElement;
+  if (tickRateInput) {
+    tickRateInput.value = eca.getTickRate().toString();
+  }
+  const stopButton = document.getElementById("stopButton") as HTMLInputElement;
+  if (stopButton) {
+    stopButton.checked = !eca.isRunning();
+  }
 }
 
 /**
@@ -134,6 +175,10 @@ function handleNeighborhoodChange() {
 function handleRuleChange() {
   const ruleSelect = document.getElementById("ruleSelect") as HTMLSelectElement;
   eca.switchRule(ruleSelect.value);
+  const tickRateInput = document.getElementById("tickRate") as HTMLInputElement;
+  if (tickRateInput) {
+    eca.setTickRate(parseInt(tickRateInput.value, 10));
+  }
   // Update paint state selector when rule changes
   updatePaintStateSelector();
 }
@@ -185,6 +230,7 @@ function initializePaintbrushControls() {
 
   if (paintbrushToggle) {
     paintbrushToggle.addEventListener("change", handlePaintbrushToggle);
+    paintbrushToggle.checked = isPaintbrushActive;
   }
 
   if (paintStateSelect) {
