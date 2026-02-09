@@ -14,7 +14,3 @@ document.addEventListener("DOMContentLoaded", function (arg) {
 
 window.addEventListener("resize", eca.resizeEvent);
 window.addEventListener("keypress", eca.keypressEvent);
-
-// Export navigation functions to global window for HTML onclick attributes
-(window as any).openNav = ui.openNav;
-(window as any).closeNav = ui.closeNav;

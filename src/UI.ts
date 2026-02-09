@@ -7,11 +7,79 @@ import { NeighborhoodType } from "./CARule";
 import * as eca from "./ECA";
 import * as persistence from "./Persistence";
 import { Vector } from "@geometric/vector";
+import * as dat from 'dat.gui';
+import { getDebugConfig } from "./DebugConfig";
 
 // Paintbrush state management
 let isPaintbrushActive: boolean = false;
 let currentPaintState: number = 0;
 let isPainting: boolean = false; // Track if mouse is currently down and painting
+
+// dat.GUI instance
+let gui: dat.GUI | null = null;
+
+// Configuration object for dat.GUI
+const config = {
+  width: 8,
+  height: 1,
+  initialConfig: '1,0,1,0,1,0,1,0',
+  neighborhood: 'elementary',
+  rule: 'rule110',
+  tickRate: 60,
+  paused: false,
+  paintbrushMode: false,
+  paintState: 0,
+  // Debug settings
+  showFPS: true,
+  showTickRate: true,
+  targetFPS: 60,
+  consoleLogging: false,
+  ecaIterationDebug: false,
+  ruleIterationDebug: false,
+
+  
+  submit: () => {
+    // Update hidden form fields if they exist, or trigger the submit directly
+    const widthInput = document.getElementById('width') as HTMLInputElement;
+    const heightInput = document.getElementById('height') as HTMLInputElement;
+    const initialConfigInput = document.getElementById('initialConfig') as HTMLInputElement;
+    
+    if (widthInput) widthInput.value = config.width.toString();
+    if (heightInput) heightInput.value = config.height.toString();
+    if (initialConfigInput) initialConfigInput.value = config.initialConfig;
+    
+    // Trigger form submission
+    const event = new Event('submit');
+    eca.submitEvent(event);
+  },
+  loadPreset: '',
+  savePresetName: '',
+  includePattern: false,
+
+  exportState: () => {
+    const ca = eca.getCurrentCA();
+    if (!ca) {
+      alert("No CA instance available");
+      return;
+    }
+    const stateName = config.savePresetName || "ca-state";
+    const tickCount = eca.getTickCount?.() || 0;
+    const json = persistence.exportStateToJSON(ca, stateName, tickCount);
+    persistence.downloadStateFile(json, `${stateName}-${Date.now()}.json`);
+  },
+  importState: async () => {
+    const jsonString = await persistence.uploadStateFile();
+    if (!jsonString) {
+      return;
+    }
+    const state = persistence.importStateFromJSON(jsonString);
+    if (!state) {
+      alert("Invalid state file");
+      return;
+    }
+    loadFullState(state);
+  }
+};
 
 /**
  * Convert client coordinates to canvas space coordinates
@@ -29,12 +97,8 @@ function getCanvasCoordinates(canvasElement: HTMLCanvasElement, clientX: number,
  */
 export function initializeUI() {
   persistence.initializePresets();
-  initializeNavigationHandlers();
-  initializeSelectHandlers();
-  initializeSimulationControls();
-  initializePaintbrushControls();
+  initializeDatGUI();
   initializePaintbrushMouseHandlers();
-  initializePersistenceControls();
   // Listen for ECA events to synchronize UI when CA is created/updated
   try {
     window.addEventListener('eca:created', () => syncUIWithCA());
@@ -45,262 +109,345 @@ export function initializeUI() {
 }
 
 /**
+ * Initialize dat.GUI panel
+ */
+function initializeDatGUI() {
+  if (gui) {
+    gui.destroy();
+  }
+  
+  gui = new dat.GUI({ width: 300 });
+  
+  // Space Configuration folder
+  const spaceFolder = gui.addFolder('Space Configuration');
+  spaceFolder.add(config, 'width', 1, 255).step(1).name('Width');
+  spaceFolder.add(config, 'height', 1, 1000).step(1).name('Height');
+  spaceFolder.add(config, 'initialConfig').name('Initial Config');
+  spaceFolder.add(config, 'submit').name('Submit');
+  spaceFolder.open();
+  
+  // Simulation Settings folder
+  const simFolder = gui.addFolder('Simulation Settings');
+  
+  // Build neighborhood options
+  const neighborhoods = eca.getAvailableNeighborhoods();
+  const neighborhoodOptions: { [key: string]: string } = {};
+  neighborhoods.forEach(({ type, label }) => {
+    neighborhoodOptions[label] = type;
+  });
+  
+  const neighborhoodController = simFolder.add(config, 'neighborhood', neighborhoodOptions).name('Neighborhood');
+  neighborhoodController.onChange((value: string) => {
+    // Update rule options
+    updateRuleOptions();
+    eca.switchNeighborhoodType(value);
+    updatePaintStateOptions();
+  });
+  
+  // Rule selector will be dynamically updated
+  const ruleController = simFolder.add(config, 'rule', {}).name('Rule');
+  ruleController.onChange((value: string) => {
+    eca.switchRule(value);
+    eca.setTickRate(config.tickRate);
+    updatePaintStateOptions();
+  });
+  
+  simFolder.add(config, 'tickRate', 0, 255).step(1).name('Tick Rate (hz)').onChange((value: number) => {
+    eca.setTickRate(value);
+  });
+  
+  simFolder.add(config, 'paused').name('Paused').onChange((value: boolean) => {
+    if (value !== !eca.isRunning()) {
+      eca.toggleTickLoop();
+    }
+  });
+  
+  simFolder.open();
+  
+  // Paintbrush folder
+  const paintFolder = gui.addFolder('Paintbrush');
+  paintFolder.add(config, 'paintbrushMode').name('Paintbrush Mode').onChange((value: boolean) => {
+    isPaintbrushActive = value;
+    if (isPaintbrushActive && eca.isRunning()) {
+      eca.toggleTickLoop();
+      config.paused = true;
+      // Update GUI to reflect pause
+      gui?.updateDisplay();
+    }
+  });
+  
+  const paintStateController = paintFolder.add(config, 'paintState', {}).name('Paint State');
+  paintStateController.onChange((value: any) => {
+    currentPaintState = Number(value);
+  });
+  
+  paintFolder.open();
+  
+  // Presets folder
+  const presetsFolder = gui.addFolder('Presets');
+  const presetOptions: { [key: string]: string } = { '-- Select --': '' };
+  persistence.getAllPresets().forEach((preset) => {
+    presetOptions[preset.name] = preset.name;
+  });
+  
+  presetsFolder.add(config, 'loadPreset', presetOptions).name('Load Preset').onChange((value: string) => {
+    if (value) {
+      loadPreset(value);
+      updatePresetOptions();
+    }
+  });
+  
+  presetsFolder.add(config, 'savePresetName').name('Save as Preset');
+  presetsFolder.add(config, 'includePattern').name('Include Pattern');
+  presetsFolder.add({ savePreset: () => {
+    if (!config.savePresetName) {
+      alert("Please enter a preset name");
+      return;
+    }
+    const ca = eca.getCurrentCA();
+    if (!ca) {
+      alert("No CA instance available");
+      return;
+    }
+    const preset = persistence.createPresetFromCA(ca, config.savePresetName, config.includePattern);
+    persistence.savePreset(preset);
+    config.savePresetName = '';
+    updatePresetOptions();
+    gui?.updateDisplay();
+    alert("Preset saved");
+  }}, 'savePreset').name('Save');
+  
+  presetsFolder.add({ deletePreset: () => {
+    if (!config.loadPreset) {
+      alert("Please select a preset");
+      return;
+    }
+    if (confirm(`Delete preset "${config.loadPreset}"?`)) {
+      persistence.deletePreset(config.loadPreset);
+      config.loadPreset = '';
+      updatePresetOptions();
+      gui?.updateDisplay();
+      alert("Preset deleted");
+    }
+  }}, 'deletePreset').name('Delete');
+  
+  presetsFolder.open();
+  
+  // State Management folder
+  const stateFolder = gui.addFolder('State Management');
+  stateFolder.add(config, 'exportState').name('Export State');
+  stateFolder.add(config, 'importState').name('Import State');
+  stateFolder.open();
+  
+  // Debug folder
+  const debugFolder = gui.addFolder('Debug');
+  debugFolder.add(config, 'showFPS').name('Show FPS').onChange((value: boolean) => {
+    getDebugConfig().toggleFPS(value);
+  });
+  
+  debugFolder.add(config, 'showTickRate').name('Show Tick Rate').onChange((value: boolean) => {
+    getDebugConfig().toggleTickRate(value);
+  });
+
+  debugFolder.add(config, 'consoleLogging').name('Console Logging').onChange((value: boolean) => {
+    getDebugConfig().toggleConsoleLogging(value);
+  });
+  
+  debugFolder.add(config, 'ecaIterationDebug').name('ECA Iteration Debug').onChange((value: boolean) => {
+    getDebugConfig().setECAIterationDebug(value);
+  });
+  
+  debugFolder.add(config, 'ruleIterationDebug').name('Rule Iteration Debug').onChange((value: boolean) => {
+    getDebugConfig().setRuleIterationDebug(value);
+  });
+  
+  debugFolder.open();
+  
+  // Initialize rule and paint state options
+  updateRuleOptions();
+  updatePaintStateOptions();
+}
+
+/**
+ * Update rule dropdown options based on current neighborhood
+ */
+function updateRuleOptions() {
+  const rules = eca.getAvailableRulesForNeighborhood(config.neighborhood as any);
+  const ruleOptions: { [key: string]: string } = {};
+  rules.forEach(({ key, label }) => {
+    ruleOptions[label] = key;
+  });
+  
+  // Find the rule controller and update its options
+  if (gui) {
+    const simFolder = gui.__folders['Simulation Settings'];
+    if (simFolder) {
+      // Remove old controller
+      const oldController = simFolder.__controllers.find((c: any) => c.property === 'rule');
+      if (oldController) {
+        simFolder.remove(oldController);
+      }
+      
+      // Add new controller with updated options
+      config.rule = rules[0]?.key || '';
+      const newController = simFolder.add(config, 'rule', ruleOptions).name('Rule');
+      newController.onChange((value: string) => {
+        eca.switchRule(value);
+        eca.setTickRate(config.tickRate);
+        updatePaintStateOptions();
+      });
+    }
+  }
+}
+
+/**
+ * Update paint state options based on current rule
+ */
+function updatePaintStateOptions() {
+  const availableStates = eca.getRuleAvailableStates(config.rule);
+  const stateOptions: { [key: string]: number } = {};
+  availableStates.forEach((state) => {
+    const label = eca.getRuleStateLabel(config.rule, state);
+    stateOptions[label] = state;
+  });
+  
+  // Find the paint state controller and update its options
+  if (gui) {
+    const paintFolder = gui.__folders['Paintbrush'];
+    if (paintFolder) {
+      // Remove old controller
+      const oldController = paintFolder.__controllers.find((c: any) => c.property === 'paintState');
+      if (oldController) {
+        paintFolder.remove(oldController);
+      }
+      
+      // Add new controller with updated options
+      config.paintState = availableStates[0] || 0;
+      currentPaintState = config.paintState;
+      const newController = paintFolder.add(config, 'paintState', stateOptions).name('Paint State');
+      newController.onChange((value: any) => {
+        currentPaintState = Number(value);
+      });
+    }
+  }
+}
+
+/**
+ * Update preset dropdown options
+ */
+function updatePresetOptions() {
+  const presetOptions: { [key: string]: string } = { '-- Select --': '' };
+  persistence.getAllPresets().forEach((preset) => {
+    presetOptions[preset.name] = preset.name;
+  });
+  
+  if (gui) {
+    const presetsFolder = gui.__folders['Presets'];
+    if (presetsFolder) {
+      // Remove old controller
+      const oldController = presetsFolder.__controllers.find((c: any) => c.property === 'loadPreset');
+      if (oldController) {
+        presetsFolder.remove(oldController);
+      }
+      
+      // Add new controller with updated options
+      config.loadPreset = '';
+      const newController = presetsFolder.add(config, 'loadPreset', presetOptions).name('Load Preset');
+      newController.onChange((value: string) => {
+        if (value) {
+          loadPreset(value);
+          updatePresetOptions();
+        }
+      });
+    }
+  }
+}
+
+/**
  * Synchronize UI controls with current CA state
  */
 export function syncUIWithCA() {
   const ca = eca.getCurrentCA();
   if (!ca) return;
 
-  // Neighborhood
-  const neighborhoodSelect = document.getElementById("neighborhoodSelect") as HTMLSelectElement;
-  if (neighborhoodSelect) {
-    neighborhoodSelect.value = eca.getCurrentNeighborhoodType();
-    // Rebuild rules for the neighborhood
-    initializeRuleSelect(neighborhoodSelect.value);
-  }
-
-  // Rule
-  const ruleSelect = document.getElementById("ruleSelect") as HTMLSelectElement;
-  if (ruleSelect) {
-    ruleSelect.value = eca.getCurrentRuleName();
-  }
-
-  // Paint state selector
-  updatePaintStateSelector();
-  // Tick rate and running state
-  const tickRateInput = document.getElementById("tickRate") as HTMLInputElement;
-  if (tickRateInput) {
-    tickRateInput.value = eca.getTickRate().toString();
-  }
-  const stopButton = document.getElementById("stopButton") as HTMLInputElement;
-  if (stopButton) {
-    stopButton.checked = !eca.isRunning();
+  // Update config object
+  config.neighborhood = eca.getCurrentNeighborhoodType();
+  config.rule = eca.getCurrentRuleName();
+  config.tickRate = eca.getTickRate();
+  config.paused = !eca.isRunning();
+  
+  // Update GUI display
+  updateRuleOptions();
+  updatePaintStateOptions();
+  
+  if (gui) {
+    gui.updateDisplay();
   }
 }
 
 /**
- * Set up sidebar navigation (open/close)
+ * Load a preset and apply its configuration
  */
-function initializeNavigationHandlers() {
-  // Navigation handlers are called from HTML onclick attributes
-  // They just manipulate DOM, no external dependencies needed
+function loadPreset(presetName: string) {
+  const preset = persistence.getPreset(presetName);
+  console.log("Loading preset data:", preset);
+  if (!preset) {
+    alert("Preset not found");
+    return;
+  }
+
+  const initData = persistence.getPresetInitializationData(preset);
+
+  // Update config object
+  config.width = initData.width;
+  config.height = initData.height;
+  config.initialConfig = initData.initialPattern;
+  config.neighborhood = preset.neighborhood;
+  config.rule = preset.rule;
+  
+  // Update ECA
+  eca.switchNeighborhoodType(preset.neighborhood);
+  updateRuleOptions();
+  eca.switchRule(preset.rule);
+  updatePaintStateOptions();
+  
+  // Update GUI
+  if (gui) {
+    gui.updateDisplay();
+  }
+  
+  // Submit to apply configuration
+  config.submit();
 }
 
 /**
- * Initialize neighborhood and rule dropdowns
+ * Load a full state and restore CA to that state
  */
-function initializeSelectHandlers() {
-  initializeNeighborhoodSelect();
-  attachSelectEventListeners();
-}
+function loadFullState(state: persistence.FullState) {
+  const initData = persistence.getStateInitializationData(state);
 
-/**
- * Initialize neighborhood dropdown from available neighborhoods
- */
-function initializeNeighborhoodSelect() {
-  const neighborhoodSelect = document.getElementById("neighborhoodSelect") as HTMLSelectElement;
-  if (!neighborhoodSelect) return;
-
-  const neighborhoods = eca.getAvailableNeighborhoods();
-  neighborhoods.forEach(({ type, label }) => {
-    const option = document.createElement("option");
-    option.value = type;
-    option.textContent = label;
-    neighborhoodSelect.appendChild(option);
-  });
-
-  // Set the dropdown to match the CA's current neighborhood type
-  const currentNeighborhoodType = eca.getCurrentNeighborhoodType();
-  neighborhoodSelect.value = currentNeighborhoodType;
-
-  // Initialize rules for the current neighborhood
-  initializeRuleSelect(currentNeighborhoodType);
-
-  // Set the rule dropdown to match the CA's current rule
-  const currentRuleName = eca.getCurrentRuleName();
-  const ruleSelect = document.getElementById("ruleSelect") as HTMLSelectElement;
-  if (ruleSelect) {
-    ruleSelect.value = currentRuleName;
+  // Update config object
+  config.width = initData.width;
+  config.height = initData.height;
+  config.initialConfig = initData.initialPattern;
+  config.neighborhood = state.neighborhood;
+  config.rule = state.rule;
+  
+  // Update ECA
+  eca.switchNeighborhoodType(state.neighborhood);
+  updateRuleOptions();
+  eca.switchRule(state.rule);
+  updatePaintStateOptions();
+  
+  // Update GUI
+  if (gui) {
+    gui.updateDisplay();
   }
-}
+  
+  // Submit to apply configuration
+  config.submit();
 
-/**
- * Initialize rule dropdown for a given neighborhood type
- */
-function initializeRuleSelect(neighborhoodType: string) {
-  const ruleSelect = document.getElementById("ruleSelect") as HTMLSelectElement;
-  if (!ruleSelect) return;
-
-  ruleSelect.innerHTML = "";
-  const rules = eca.getAvailableRulesForNeighborhood(neighborhoodType as any);
-  rules.forEach(({ key, label }) => {
-    const option = document.createElement("option");
-    option.value = key;
-    option.textContent = label;
-    ruleSelect.appendChild(option);
-  });
-}
-
-/**
- * Attach event listeners to select elements
- */
-function attachSelectEventListeners() {
-  const neighborhoodSelect = document.getElementById("neighborhoodSelect") as HTMLSelectElement;
-  const ruleSelect = document.getElementById("ruleSelect") as HTMLSelectElement;
-
-  if (neighborhoodSelect) {
-    neighborhoodSelect.addEventListener("change", handleNeighborhoodChange);
-  }
-
-  if (ruleSelect) {
-    ruleSelect.addEventListener("change", handleRuleChange);
-  }
-}
-
-/**
- * Handle neighborhood type selection change
- */
-function handleNeighborhoodChange() {
-  const neighborhoodSelect = document.getElementById("neighborhoodSelect") as HTMLSelectElement;
-  const value = neighborhoodSelect.value;
-  initializeRuleSelect(value);
-  eca.switchNeighborhoodType(value);
-  // Update paint state selector when neighborhood changes (rule may have changed)
-  updatePaintStateSelector();
-}
-
-/**
- * Handle rule selection change
- */
-function handleRuleChange() {
-  const ruleSelect = document.getElementById("ruleSelect") as HTMLSelectElement;
-  eca.switchRule(ruleSelect.value);
-  const tickRateInput = document.getElementById("tickRate") as HTMLInputElement;
-  if (tickRateInput) {
-    eca.setTickRate(parseInt(tickRateInput.value, 10));
-  }
-  // Update paint state selector when rule changes
-  updatePaintStateSelector();
-}
-
-/**
- * Initialize simulation control listeners (tick rate, stop button)
- */
-function initializeSimulationControls() {
-  const stopButton = document.getElementById("stopButton") as HTMLInputElement;
-  const tickRateInput = document.getElementById("tickRate") as HTMLInputElement;
-  const configForm = document.getElementById("configForm") as HTMLFormElement;
-
-  if (stopButton) {
-    stopButton.addEventListener("click", eca.toggleTickLoop);
-  }
-
-  if (tickRateInput) {
-    tickRateInput.addEventListener("change", eca.triggerTickRateChange);
-  }
-
-  if (configForm) {
-    configForm.addEventListener("submit", eca.submitEvent);
-  }
-}
-
-/**
- * Global navigation functions called from HTML onclick attributes
- */
-export function openNav() {
-  const sidebar = document.getElementById("mySidebar");
-  const canvas = document.getElementById("myCanvas");
-  if (sidebar) sidebar.style.width = "250px";
-  if (canvas) (canvas as any).style.marginLeft = "250px";
-}
-
-export function closeNav() {
-  const sidebar = document.getElementById("mySidebar");
-  const canvas = document.getElementById("myCanvas");
-  if (sidebar) sidebar.style.width = "0";
-  if (canvas) (canvas as any).style.marginLeft = "0";
-}
-
-/**
- * Initialize paintbrush UI controls (toggle and state selector)
- */
-function initializePaintbrushControls() {
-  const paintbrushToggle = document.getElementById("paintbrushToggle") as HTMLInputElement;
-  const paintStateSelect = document.getElementById("paintStateSelect") as HTMLSelectElement;
-
-  if (paintbrushToggle) {
-    paintbrushToggle.addEventListener("change", handlePaintbrushToggle);
-    paintbrushToggle.checked = isPaintbrushActive;
-  }
-
-  if (paintStateSelect) {
-    paintStateSelect.addEventListener("change", handlePaintStateChange);
-  }
-
-  // Initialize paint state selector with current rule's states
-  updatePaintStateSelector();
-}
-
-/**
- * Update the paint state selector dropdown based on the current rule
- */
-function updatePaintStateSelector() {
-  const paintStateSelect = document.getElementById("paintStateSelect") as HTMLSelectElement;
-  if (!paintStateSelect) return;
-
-  // Get current rule's available states
-  const currentRuleName = eca.getCurrentRuleName();
-  const currentNeighborhoodType = eca.getCurrentNeighborhoodType();
-  const rules = eca.getAvailableRulesForNeighborhood(currentNeighborhoodType);
-  const currentRule = rules.find(r => r.key === currentRuleName);
-
-  if (!currentRule) return;
-
-  // Get the actual rule instance to call getAvailableStates()
-  // We need to access the rule registry - let's add a helper function in ECA
-  const availableStates = eca.getRuleAvailableStates(currentRuleName);
-
-  paintStateSelect.innerHTML = "";
-  availableStates.forEach((state) => {
-    const option = document.createElement("option");
-    option.value = state.toString();
-    option.textContent = eca.getRuleStateLabel(currentRuleName, state);
-    paintStateSelect.appendChild(option);
-  });
-
-  // Set default to first state
-  if (availableStates.length > 0) {
-    currentPaintState = availableStates[0];
-    paintStateSelect.value = availableStates[0].toString();
-  }
-}
-
-/**
- * Handle paintbrush toggle change
- */
-function handlePaintbrushToggle() {
-  const paintbrushToggle = document.getElementById("paintbrushToggle") as HTMLInputElement;
-  isPaintbrushActive = paintbrushToggle.checked;
-
-  // Pause simulation when paintbrush is activated
-  if (isPaintbrushActive) {
-    // Check if simulation is running and pause it
-    const stopButton = document.getElementById("stopButton") as HTMLInputElement;
-    if (stopButton && !stopButton.checked) {
-      // Simulation is running, pause it
-      eca.toggleTickLoop();
-    }
-  }
-}
-
-/**
- * Handle paint state selection change
- */
-function handlePaintStateChange() {
-  const paintStateSelect = document.getElementById("paintStateSelect") as HTMLSelectElement;
-  if (paintStateSelect) {
-    currentPaintState = parseInt(paintStateSelect.value, 10);
-  }
+  alert(`State loaded: "${state.name}" (${state.tickCount} ticks)`);
 }
 
 /**
@@ -325,16 +472,13 @@ function initializePaintbrushMouseHandlers() {
     if (isPaintbrushActive && isPainting) {
       const coords = getCanvasCoordinates(canvasElement, event.clientX, event.clientY);
       paintAtPoint(coords);
-      // NOTE: paintAtPoint now only marks cells as dirty, doesn't redraw
-      // Redraw happens via requestAnimationFrame render loop
     }
   });
 
   canvasElement.addEventListener("mouseup", (event: MouseEvent) => {
     if (isPaintbrushActive) {
       isPainting = false;
-      // Trigger final redraw when paint stroke completes
-      eca.resizeEvent(new Event("mouseup")); // Reuse resizeEvent to trigger redraw
+      eca.resizeEvent(new Event("mouseup"));
     }
   });
 
@@ -350,213 +494,9 @@ function initializePaintbrushMouseHandlers() {
  */
 function paintAtPoint(coords: { x: number; y: number }) {
   const cellPosition = eca.canvasPointToCellPosition(coords);
+  console.debug(`Painting ${currentPaintState} at canvas coordinates (${coords.x}, ${coords.y}), which maps to cell position ${cellPosition}`);
   if (cellPosition !== null) {
     eca.paintCell(cellPosition, currentPaintState);
   }
-}
-
-/**
- * Initialize persistence controls (presets and full state export/import)
- */
-function initializePersistenceControls() {
-  // Populate preset dropdown
-  populatePresetDropdown();
-
-  // Preset controls
-  const loadPresetBtn = document.getElementById("loadPresetButton") as HTMLButtonElement;
-  const deletePresetBtn = document.getElementById("deletePresetButton") as HTMLButtonElement;
-  const savePresetBtn = document.getElementById("savePresetButton") as HTMLButtonElement;
-
-  if (loadPresetBtn) {
-    loadPresetBtn.addEventListener("click", () => {
-      const presetSelect = document.getElementById("presetSelect") as HTMLSelectElement;
-      const presetName = presetSelect?.value;
-      if (presetName) {
-        console.log("Loading preset:", presetName);
-        loadPreset(presetName);
-      } else {
-        alert("Please select a preset");
-      }
-    });
-  }
-
-  if (deletePresetBtn) {
-    deletePresetBtn.addEventListener("click", () => {
-      const presetSelect = document.getElementById("presetSelect") as HTMLSelectElement;
-      const presetName = presetSelect?.value;
-      if (presetName) {
-        if (confirm(`Delete preset "${presetName}"?`)) {
-          persistence.deletePreset(presetName);
-          populatePresetDropdown();
-          alert("Preset deleted");
-        }
-      } else {
-        alert("Please select a preset");
-      }
-    });
-  }
-
-  if (savePresetBtn) {
-    savePresetBtn.addEventListener("click", () => {
-      const presetName = (document.getElementById("newPresetName") as HTMLInputElement)?.value;
-      const includePattern = (document.getElementById("includePatternCheckbox") as HTMLInputElement)?.checked;
-
-      if (!presetName) {
-        alert("Please enter a preset name");
-        return;
-      }
-
-      const ca = eca.getCurrentCA();
-      if (!ca) {
-        alert("No CA instance available");
-        return;
-      }
-
-      const preset = persistence.createPresetFromCA(ca, presetName, includePattern);
-      persistence.savePreset(preset);
-      populatePresetDropdown();
-      (document.getElementById("newPresetName") as HTMLInputElement).value = "";
-      alert("Preset saved");
-    });
-  }
-
-  // Full state controls
-  const exportStateBtn = document.getElementById("exportStateButton") as HTMLButtonElement;
-  const importStateBtn = document.getElementById("importStateButton") as HTMLButtonElement;
-
-  if (exportStateBtn) {
-    exportStateBtn.addEventListener("click", () => {
-      const ca = eca.getCurrentCA();
-      if (!ca) {
-        alert("No CA instance available");
-        return;
-      }
-
-      const stateName = (document.getElementById("stateName") as HTMLInputElement)?.value || "ca-state";
-      const tickCount = eca.getTickCount?.() || 0;
-      const json = persistence.exportStateToJSON(ca, stateName, tickCount);
-      persistence.downloadStateFile(json, `${stateName}-${Date.now()}.json`);
-    });
-  }
-
-  if (importStateBtn) {
-    importStateBtn.addEventListener("click", async () => {
-      const jsonString = await persistence.uploadStateFile();
-      if (!jsonString) {
-        return;
-      }
-
-      const state = persistence.importStateFromJSON(jsonString);
-      if (!state) {
-        alert("Invalid state file");
-        return;
-      }
-
-      // Load the state
-      loadFullState(state);
-    });
-  }
-}
-
-/**
- * Populate preset dropdown with saved presets
- */
-function populatePresetDropdown() {
-  const presetSelect = document.getElementById("presetSelect") as HTMLSelectElement;
-  if (!presetSelect) return;
-
-  presetSelect.innerHTML = '<option value="">-- Select a preset --</option>';
-  const presets = persistence.getAllPresets();
-  presets.forEach((preset) => {
-    const option = document.createElement("option");
-    option.value = preset.name;
-    option.textContent = preset.name;
-    presetSelect.appendChild(option);
-  });
-}
-
-/**
- * Load a preset and apply its configuration
- */
-function loadPreset(presetName: string) {
-  const preset = persistence.getPreset(presetName);
-  console.log("Loading preset data:", preset);
-  if (!preset) {
-    alert("Preset not found");
-    return;
-  }
-
-  const initData = persistence.getPresetInitializationData(preset);
-
-  // Update form fields
-  (document.getElementById("width") as HTMLInputElement).value = initData.width.toString();
-  (document.getElementById("height") as HTMLInputElement).value = initData.height.toString();
-  (document.getElementById("initialConfig") as HTMLInputElement).value = initData.initialPattern;
-
-  // Update neighborhood dropdown and rebuild rules
-  const neighborhoodSelect = document.getElementById("neighborhoodSelect") as HTMLSelectElement;
-  if (neighborhoodSelect) {
-    neighborhoodSelect.value = preset.neighborhood;
-    // Directly rebuild rule select instead of dispatching event to avoid race condition
-    initializeRuleSelect(preset.neighborhood);
-    // Call neighborhood change handler logic
-    eca.switchNeighborhoodType(preset.neighborhood);
-    updatePaintStateSelector();
-  }
-
-  // Set rule value immediately (rules are now populated)
-  const ruleSelect = document.getElementById("ruleSelect") as HTMLSelectElement;
-  if (ruleSelect) {
-    ruleSelect.value = preset.rule;
-    // Trigger rule change handler
-    eca.switchRule(preset.rule);
-    updatePaintStateSelector();
-  }
-
-  // Submit to apply configuration
-  const submitButton = document.getElementById("submitButton") as HTMLInputElement;
-  if (submitButton) {
-    submitButton.click();
-  }
-}
-
-/**
- * Load a full state and restore CA to that state
- */
-function loadFullState(state: persistence.FullState) {
-  const initData = persistence.getStateInitializationData(state);
-
-  // Update form fields
-  (document.getElementById("width") as HTMLInputElement).value = initData.width.toString();
-  (document.getElementById("height") as HTMLInputElement).value = initData.height.toString();
-  (document.getElementById("initialConfig") as HTMLInputElement).value = initData.initialPattern;
-
-  // Update neighborhood dropdown and rebuild rules
-  const neighborhoodSelect = document.getElementById("neighborhoodSelect") as HTMLSelectElement;
-  if (neighborhoodSelect) {
-    neighborhoodSelect.value = state.neighborhood;
-    // Directly rebuild rule select instead of dispatching event to avoid race condition
-    initializeRuleSelect(state.neighborhood);
-    // Call neighborhood change handler logic
-    eca.switchNeighborhoodType(state.neighborhood);
-    updatePaintStateSelector();
-  }
-
-  // Set rule value immediately (rules are now populated)
-  const ruleSelect = document.getElementById("ruleSelect") as HTMLSelectElement;
-  if (ruleSelect) {
-    ruleSelect.value = state.rule;
-    // Trigger rule change handler
-    eca.switchRule(state.rule);
-    updatePaintStateSelector();
-  }
-
-  // Submit form to create CA with new configuration and initial cell states
-  const submitButton = document.getElementById("submitButton") as HTMLInputElement;
-  if (submitButton) {
-    submitButton.click();
-  }
-
-  alert(`State loaded: "${state.name}" (${state.tickCount} ticks)`);
 }
 

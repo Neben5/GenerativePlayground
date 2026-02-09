@@ -44,7 +44,7 @@ export class FramerateMonitor {
   /**
    * Log current performance metrics to console
    */
-  private logMetrics(): void {
+  protected logMetrics(): void {
     const avgFrameTime = this.frameTimes.length > 0
       ? this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length
       : 0;

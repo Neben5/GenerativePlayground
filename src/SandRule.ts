@@ -1,6 +1,7 @@
 import { Vector } from "@geometric/vector";
 import { CellSpace, Cell } from "./Cells";
 import { CARule, NeighborhoodType } from "./CARule";
+import { getDebugConfig } from "./DebugConfig";
 
 /**
  * Sand physics states - used exclusively by SandRule
@@ -23,9 +24,6 @@ export class SandRule implements CARule {
   static RuleName = "sand";
   ruleName = "sand";
   neighborhoodType = NeighborhoodType.MOORE;
-  debug = {
-    iteration: false,
-  };
 
   apply(cellSpace: CellSpace, position: Vector): number {
     const self = this.getNeighbor(cellSpace, position, 0, 0).state;
@@ -38,7 +36,7 @@ export class SandRule implements CARule {
     const downLeft = this.getNeighbor(cellSpace, position, 1, -1).state;
     const downRight = this.getNeighbor(cellSpace, position, 1, 1).state;
 
-    if (this.debug.iteration)
+    if (getDebugConfig().getRuleIterationDebug())
       console.log(`Neighborhood states at position ${position}: \n\
         ${upLeft} ${up} ${upRight} :  (${position[0] - 1}, ${position[1] - 1})  (${position[0]}, ${position[1] - 1})  (${position[0] + 1}, ${position[1] - 1}) \n\
         ${left} ${self} ${right} : (${position[0] - 1}, ${position[1]})  (${position[0]}, ${position[1]})  (${position[0] + 1}, ${position[1]}) \n\

@@ -64,7 +64,7 @@ export class TickrateMonitor {
   /**
    * Log current tick rate to console
    */
-  private logMetrics(): void {
+  protected logMetrics(): void {
     const status = this.currentTickRate >= this.targetTickRate ? '✓' : '✗';
     console.log(
       `${status} TPS: ${this.currentTickRate.toFixed(1)} | ` +

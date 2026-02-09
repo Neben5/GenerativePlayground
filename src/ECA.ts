@@ -3,8 +3,7 @@ import { CellSpace, Cell } from "./Cells";
 import { CARule, NeighborhoodType, NEIGHBORHOOD_METADATA } from "./CARule";
 import { Rule110 } from "./Rule110";
 import { SandRule } from "./SandRule";
-import { FramerateMonitor } from "./FramerateMonitor";
-import { TickrateMonitor } from "./TickrateMonitor";
+import { getDebugConfig } from "./DebugConfig";
 
 // Simple Bounds interface to replace Paper.js Rectangle
 export interface Bounds {
@@ -21,8 +20,6 @@ var STOP = true;
 
 var tickLoopIntervalId: NodeJS.Timeout = null;
 var renderLoopId: number = null; // requestAnimationFrame ID
-var framerateMonitor: FramerateMonitor = new FramerateMonitor(60); // Target 30 FPS for 100x100+ grids
-var tickrateMonitor: TickrateMonitor = new TickrateMonitor(0); // Track simulation tick rate
 
 class CanvasSpace {
   boundingRect: Bounds;
@@ -103,11 +100,12 @@ class CanvasSpace {
  * Get canvas bounds using native DOM API
  */
 function getCanvasBounds(canvasElement: HTMLCanvasElement): Bounds {
+  const rect = canvasElement.getBoundingClientRect();
   return {
     left: 0,
     top: 0,
-    width: canvasElement.width,
-    height: canvasElement.height,
+    width: rect.width,
+    height: rect.height,
   };
 }
 
@@ -128,10 +126,6 @@ export class CA {
 
   // Dirty-rect tracking for optimization
   private dirtyRects: Set<number> = new Set(); // Set of cell indices that changed
-
-  debug = {
-    iteration: false,
-  };
 
   constructor(
     num_rectangles_wide: number,
@@ -180,7 +174,7 @@ export class CA {
   public getNextState(index: number): number {
     const position = this.cellSpace.getPosition(index);
     const ret = this.currentRule.apply(this.cellSpace, position);
-    if (this.debug.iteration)
+    if (getDebugConfig().getECAIterationDebug())
       console.log(`Computed next state for cell with rule ${this.currentRule.name} at index ${index} (position ${position}): ${ret}`);
     return ret;
   }
@@ -201,11 +195,16 @@ export class CA {
    */
   public scuffCell(position: Vector, state: number): void {
     if (!this.cellSpace.getPositionIsValid(position)) {
+      console.warn(`Attempted to paint ${state} at invalid position ${position}, ignoring`);
       return; // Invalid position, do nothing
     }
     const index = this.cellSpace.getIndex(position);
     if (this.cellSpace.cells[index].state !== state) {
-      this.cellSpace.cells[index].state = state;
+      // this.cellSpace.cells[index].state = state;
+      this.cellSpace.cells[index] = new Cell(state);
+      console.log(`Painted cell at position ${position} (index ${index}) with state ${state} \n
+        Cell is now ${this.cellSpace.cells[index]}\n
+        ${this.cellSpace.cells}`);
       this.markDirty(index);
     }
   }
@@ -270,6 +269,7 @@ export class CA {
   }
 
   iterate() {
+    this.currentStateBuffer = this.cellSpace.cells.map(cell => cell.state);
     // Compute next states into the next state buffer
     for (let i = 0; i < this.cellSpace.cells.length; i++) {
       this.nextStateBuffer[i] = this.getNextState(i);
@@ -277,7 +277,8 @@ export class CA {
     // Update cells with computed states and track changes
     for (let i = 0; i < this.cellSpace.cells.length; i++) {
       if (this.cellSpace.cells[i].state !== this.nextStateBuffer[i]) {
-        this.cellSpace.cells[i].state = this.nextStateBuffer[i];
+        this.cellSpace.cells[i] = new Cell(this.nextStateBuffer[i]);
+        // this.cellSpace.cells[i].state = this.nextStateBuffer[i];
         this.markDirty(i);
       }
     }
@@ -285,7 +286,7 @@ export class CA {
     const temp = this.currentStateBuffer;
     this.currentStateBuffer = this.nextStateBuffer;
     this.nextStateBuffer = temp;
-    if (this.debug.iteration) {
+    if (getDebugConfig().getECAIterationDebug()) {
       console.log(this.cellSpace.cells.map((cell) => cell.state));
       console.log(`Iterated`);
     }
@@ -430,7 +431,7 @@ function startRenderLoop() {
     }
 
     // Track framerate
-    framerateMonitor.tick();
+    getDebugConfig().framerateMonitor.tick();
 
     // Schedule next frame
     renderLoopId = requestAnimationFrame(renderFrame);
@@ -464,7 +465,7 @@ export function keypressEvent(event: KeyboardEvent) {
 
 function tickAction() {
   ca.iterate();
-  tickrateMonitor.tick();
+  getDebugConfig().tickrateMonitor.tick();
   // Note: rendering is now completely decoupled and happens in the requestAnimationFrame render loop
 }
 
@@ -491,7 +492,7 @@ function updateStopButtonState() {
   if (stopButton) {
     stopButton.checked = STOP;
     if (STOP) {
-      tickrateMonitor.reset(); // Show 0 TPS when paused
+      getDebugConfig().tickrateMonitor.reset(); // Show 0 TPS when paused
     }
   }
 }
@@ -510,7 +511,7 @@ export function triggerTickRateChange() {
 
 export function setTickRate(newRate: number) {
   TICKRATE = newRate;
-  tickrateMonitor.setTargetTickRate(STOP ? 0 : TICKRATE);
+  getDebugConfig().tickrateMonitor.setTargetTickRate(STOP ? 0 : TICKRATE);
   if (tickLoopIntervalId) {
     clearInterval(tickLoopIntervalId);
     tickLoopIntervalId = null;
@@ -531,7 +532,7 @@ export function isRunning(): boolean {
 }
 
 export function getTickCount(): number {
-  return tickrateMonitor.getTickCount();
+  return getDebugConfig().tickrateMonitor.getTickCount();
 }
 
 
@@ -644,6 +645,8 @@ export function updateRuleOptions(neighborhoodType: NeighborhoodType) {
 export function paintCell(position: Vector, state: number): void {
   if (ca) {
     ca.scuffCell(position, state);
+  } else {
+    console.error("CA instance not initialized");
   }
 }
 
