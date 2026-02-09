@@ -69,13 +69,13 @@ export class DebugConfig {
     // FPS Display
     this.fpsDisplayElement = document.getElementById("fpsDisplay");
     if (!this.fpsDisplayElement) {
-      this.fpsDisplayElement = this.createDebugDisplay("fpsDisplay", "top: 10px;");
+      this.fpsDisplayElement = this.createDebugDisplay("fpsDisplay", "top: 10px;", false);
     }
     
     // Tick Rate Display
     this.tickrateDisplayElement = document.getElementById("tickrateDisplay");
     if (!this.tickrateDisplayElement) {
-      this.tickrateDisplayElement = this.createDebugDisplay("tickrateDisplay", "top: 35px;");
+      this.tickrateDisplayElement = this.createDebugDisplay("tickrateDisplay", "top: 45px;", false);
     }
     
     this.updateDisplayVisibility();
@@ -84,13 +84,13 @@ export class DebugConfig {
   /**
    * Create a debug display element
    */
-  private createDebugDisplay(id: string, positionStyle: string): HTMLElement {
+  private createDebugDisplay(id: string, positionStyle: string, right = true): HTMLElement {
     const element = document.createElement("div");
     element.id = id;
     element.style.cssText = `
       position: fixed;
       ${positionStyle}
-      right: 10px;
+      ${right ? "right: 10px;" : "left: 10px;"}
       background: rgba(0, 0, 0, 0.7);
       color: #0f0;
       padding: 8px 12px;

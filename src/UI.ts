@@ -10,6 +10,9 @@ import { Vector } from "@geometric/vector";
 import * as dat from 'dat.gui';
 import { getDebugConfig } from "./DebugConfig";
 
+// Canvas element reference
+let canvasElement: HTMLCanvasElement | null = null;
+
 // Paintbrush state management
 let isPaintbrushActive: boolean = false;
 let currentPaintState: number = 0;
@@ -37,20 +40,24 @@ const config = {
   ecaIterationDebug: false,
   ruleIterationDebug: false,
 
-  
+
   submit: () => {
-    // Update hidden form fields if they exist, or trigger the submit directly
+    if (!canvasElement) {
+      console.error("Canvas element not initialized");
+      return;
+    }
+
+    // Update hidden form fields for backwards compatibility
     const widthInput = document.getElementById('width') as HTMLInputElement;
     const heightInput = document.getElementById('height') as HTMLInputElement;
     const initialConfigInput = document.getElementById('initialConfig') as HTMLInputElement;
-    
+
     if (widthInput) widthInput.value = config.width.toString();
     if (heightInput) heightInput.value = config.height.toString();
     if (initialConfigInput) initialConfigInput.value = config.initialConfig;
-    
-    // Trigger form submission
-    const event = new Event('submit');
-    eca.submitEvent(event);
+
+    // Trigger form submission with canvas element
+    eca.submitDimensions(config.width, config.height, config.initialConfig, canvasElement);
   },
   loadPreset: '',
   savePresetName: '',
@@ -95,7 +102,8 @@ function getCanvasCoordinates(canvasElement: HTMLCanvasElement, clientX: number,
 /**
  * Initialize all UI elements and event listeners
  */
-export function initializeUI() {
+export function initializeUI(canvas: HTMLCanvasElement) {
+  canvasElement = canvas;
   persistence.initializePresets();
   initializeDatGUI();
   initializePaintbrushMouseHandlers();
@@ -103,7 +111,7 @@ export function initializeUI() {
   try {
     window.addEventListener('eca:created', () => syncUIWithCA());
     window.addEventListener('eca:updated', () => syncUIWithCA());
-  } catch (e) {}
+  } catch (e) { }
   // Initial sync
   syncUIWithCA();
 }
@@ -115,9 +123,9 @@ function initializeDatGUI() {
   if (gui) {
     gui.destroy();
   }
-  
+
   gui = new dat.GUI({ width: 300 });
-  
+
   // Space Configuration folder
   const spaceFolder = gui.addFolder('Space Configuration');
   spaceFolder.add(config, 'width', 1, 255).step(1).name('Width');
@@ -125,17 +133,17 @@ function initializeDatGUI() {
   spaceFolder.add(config, 'initialConfig').name('Initial Config');
   spaceFolder.add(config, 'submit').name('Submit');
   spaceFolder.open();
-  
+
   // Simulation Settings folder
   const simFolder = gui.addFolder('Simulation Settings');
-  
+
   // Build neighborhood options
   const neighborhoods = eca.getAvailableNeighborhoods();
   const neighborhoodOptions: { [key: string]: string } = {};
   neighborhoods.forEach(({ type, label }) => {
     neighborhoodOptions[label] = type;
   });
-  
+
   const neighborhoodController = simFolder.add(config, 'neighborhood', neighborhoodOptions).name('Neighborhood');
   neighborhoodController.onChange((value: string) => {
     // Update rule options
@@ -143,7 +151,7 @@ function initializeDatGUI() {
     eca.switchNeighborhoodType(value);
     updatePaintStateOptions();
   });
-  
+
   // Rule selector will be dynamically updated
   const ruleController = simFolder.add(config, 'rule', {}).name('Rule');
   ruleController.onChange((value: string) => {
@@ -151,19 +159,19 @@ function initializeDatGUI() {
     eca.setTickRate(config.tickRate);
     updatePaintStateOptions();
   });
-  
+
   simFolder.add(config, 'tickRate', 0, 255).step(1).name('Tick Rate (hz)').onChange((value: number) => {
     eca.setTickRate(value);
   });
-  
+
   simFolder.add(config, 'paused').name('Paused').onChange((value: boolean) => {
     if (value !== !eca.isRunning()) {
       eca.toggleTickLoop();
     }
   });
-  
+
   simFolder.open();
-  
+
   // Paintbrush folder
   const paintFolder = gui.addFolder('Paintbrush');
   paintFolder.add(config, 'paintbrushMode').name('Paintbrush Mode').onChange((value: boolean) => {
@@ -175,76 +183,80 @@ function initializeDatGUI() {
       gui?.updateDisplay();
     }
   });
-  
+
   const paintStateController = paintFolder.add(config, 'paintState', {}).name('Paint State');
   paintStateController.onChange((value: any) => {
     currentPaintState = Number(value);
   });
-  
+
   paintFolder.open();
-  
+
   // Presets folder
   const presetsFolder = gui.addFolder('Presets');
   const presetOptions: { [key: string]: string } = { '-- Select --': '' };
   persistence.getAllPresets().forEach((preset) => {
     presetOptions[preset.name] = preset.name;
   });
-  
+
   presetsFolder.add(config, 'loadPreset', presetOptions).name('Load Preset').onChange((value: string) => {
     if (value) {
       loadPreset(value);
       updatePresetOptions();
     }
   });
-  
+
   presetsFolder.add(config, 'savePresetName').name('Save as Preset');
   presetsFolder.add(config, 'includePattern').name('Include Pattern');
-  presetsFolder.add({ savePreset: () => {
-    if (!config.savePresetName) {
-      alert("Please enter a preset name");
-      return;
-    }
-    const ca = eca.getCurrentCA();
-    if (!ca) {
-      alert("No CA instance available");
-      return;
-    }
-    const preset = persistence.createPresetFromCA(ca, config.savePresetName, config.includePattern);
-    persistence.savePreset(preset);
-    config.savePresetName = '';
-    updatePresetOptions();
-    gui?.updateDisplay();
-    alert("Preset saved");
-  }}, 'savePreset').name('Save');
-  
-  presetsFolder.add({ deletePreset: () => {
-    if (!config.loadPreset) {
-      alert("Please select a preset");
-      return;
-    }
-    if (confirm(`Delete preset "${config.loadPreset}"?`)) {
-      persistence.deletePreset(config.loadPreset);
-      config.loadPreset = '';
+  presetsFolder.add({
+    savePreset: () => {
+      if (!config.savePresetName) {
+        alert("Please enter a preset name");
+        return;
+      }
+      const ca = eca.getCurrentCA();
+      if (!ca) {
+        alert("No CA instance available");
+        return;
+      }
+      const preset = persistence.createPresetFromCA(ca, config.savePresetName, config.includePattern);
+      persistence.savePreset(preset);
+      config.savePresetName = '';
       updatePresetOptions();
       gui?.updateDisplay();
-      alert("Preset deleted");
+      alert("Preset saved");
     }
-  }}, 'deletePreset').name('Delete');
-  
+  }, 'savePreset').name('Save');
+
+  presetsFolder.add({
+    deletePreset: () => {
+      if (!config.loadPreset) {
+        alert("Please select a preset");
+        return;
+      }
+      if (confirm(`Delete preset "${config.loadPreset}"?`)) {
+        persistence.deletePreset(config.loadPreset);
+        config.loadPreset = '';
+        updatePresetOptions();
+        gui?.updateDisplay();
+        alert("Preset deleted");
+      }
+    }
+  }, 'deletePreset').name('Delete');
+
   presetsFolder.open();
-  
+
   // State Management folder
   const stateFolder = gui.addFolder('State Management');
   stateFolder.add(config, 'exportState').name('Export State');
   stateFolder.add(config, 'importState').name('Import State');
   stateFolder.open();
-  
+
   // Debug folder
   const debugFolder = gui.addFolder('Debug');
   debugFolder.add(config, 'showFPS').name('Show FPS').onChange((value: boolean) => {
     getDebugConfig().toggleFPS(value);
   });
-  
+
   debugFolder.add(config, 'showTickRate').name('Show Tick Rate').onChange((value: boolean) => {
     getDebugConfig().toggleTickRate(value);
   });
@@ -252,17 +264,17 @@ function initializeDatGUI() {
   debugFolder.add(config, 'consoleLogging').name('Console Logging').onChange((value: boolean) => {
     getDebugConfig().toggleConsoleLogging(value);
   });
-  
+
   debugFolder.add(config, 'ecaIterationDebug').name('ECA Iteration Debug').onChange((value: boolean) => {
     getDebugConfig().setECAIterationDebug(value);
   });
-  
+
   debugFolder.add(config, 'ruleIterationDebug').name('Rule Iteration Debug').onChange((value: boolean) => {
     getDebugConfig().setRuleIterationDebug(value);
   });
-  
+
   debugFolder.open();
-  
+
   // Initialize rule and paint state options
   updateRuleOptions();
   updatePaintStateOptions();
@@ -277,7 +289,7 @@ function updateRuleOptions() {
   rules.forEach(({ key, label }) => {
     ruleOptions[label] = key;
   });
-  
+
   // Find the rule controller and update its options
   if (gui) {
     const simFolder = gui.__folders['Simulation Settings'];
@@ -287,7 +299,7 @@ function updateRuleOptions() {
       if (oldController) {
         simFolder.remove(oldController);
       }
-      
+
       // Add new controller with updated options
       config.rule = rules[0]?.key || '';
       const newController = simFolder.add(config, 'rule', ruleOptions).name('Rule');
@@ -310,7 +322,7 @@ function updatePaintStateOptions() {
     const label = eca.getRuleStateLabel(config.rule, state);
     stateOptions[label] = state;
   });
-  
+
   // Find the paint state controller and update its options
   if (gui) {
     const paintFolder = gui.__folders['Paintbrush'];
@@ -320,7 +332,7 @@ function updatePaintStateOptions() {
       if (oldController) {
         paintFolder.remove(oldController);
       }
-      
+
       // Add new controller with updated options
       config.paintState = availableStates[0] || 0;
       currentPaintState = config.paintState;
@@ -340,7 +352,7 @@ function updatePresetOptions() {
   persistence.getAllPresets().forEach((preset) => {
     presetOptions[preset.name] = preset.name;
   });
-  
+
   if (gui) {
     const presetsFolder = gui.__folders['Presets'];
     if (presetsFolder) {
@@ -349,7 +361,7 @@ function updatePresetOptions() {
       if (oldController) {
         presetsFolder.remove(oldController);
       }
-      
+
       // Add new controller with updated options
       config.loadPreset = '';
       const newController = presetsFolder.add(config, 'loadPreset', presetOptions).name('Load Preset');
@@ -375,11 +387,11 @@ export function syncUIWithCA() {
   config.rule = eca.getCurrentRuleName();
   config.tickRate = eca.getTickRate();
   config.paused = !eca.isRunning();
-  
+
   // Update GUI display
   updateRuleOptions();
   updatePaintStateOptions();
-  
+
   if (gui) {
     gui.updateDisplay();
   }
@@ -404,18 +416,18 @@ function loadPreset(presetName: string) {
   config.initialConfig = initData.initialPattern;
   config.neighborhood = preset.neighborhood;
   config.rule = preset.rule;
-  
+
   // Update ECA
   eca.switchNeighborhoodType(preset.neighborhood);
   updateRuleOptions();
   eca.switchRule(preset.rule);
   updatePaintStateOptions();
-  
+
   // Update GUI
   if (gui) {
     gui.updateDisplay();
   }
-  
+
   // Submit to apply configuration
   config.submit();
 }
@@ -432,18 +444,18 @@ function loadFullState(state: persistence.FullState) {
   config.initialConfig = initData.initialPattern;
   config.neighborhood = state.neighborhood;
   config.rule = state.rule;
-  
+
   // Update ECA
   eca.switchNeighborhoodType(state.neighborhood);
   updateRuleOptions();
   eca.switchRule(state.rule);
   updatePaintStateOptions();
-  
+
   // Update GUI
   if (gui) {
     gui.updateDisplay();
   }
-  
+
   // Submit to apply configuration
   config.submit();
 
@@ -454,14 +466,13 @@ function loadFullState(state: persistence.FullState) {
  * Initialize native canvas mouse event handlers for paintbrush
  */
 function initializePaintbrushMouseHandlers() {
-  const canvasElement = document.getElementById("myCanvas") as HTMLCanvasElement;
   if (!canvasElement) {
-    console.error("Canvas element 'myCanvas' not found");
+    console.error("Canvas element not initialized");
     return;
   }
 
   canvasElement.addEventListener("mousedown", (event: MouseEvent) => {
-    if (isPaintbrushActive) {
+    if (isPaintbrushActive && canvasElement) {
       isPainting = true;
       const coords = getCanvasCoordinates(canvasElement, event.clientX, event.clientY);
       paintAtPoint(coords);
@@ -469,7 +480,7 @@ function initializePaintbrushMouseHandlers() {
   });
 
   canvasElement.addEventListener("mousemove", (event: MouseEvent) => {
-    if (isPaintbrushActive && isPainting) {
+    if (isPaintbrushActive && isPainting && canvasElement) {
       const coords = getCanvasCoordinates(canvasElement, event.clientX, event.clientY);
       paintAtPoint(coords);
     }
@@ -478,7 +489,7 @@ function initializePaintbrushMouseHandlers() {
   canvasElement.addEventListener("mouseup", (event: MouseEvent) => {
     if (isPaintbrushActive) {
       isPainting = false;
-      eca.resizeEvent(new Event("mouseup"));
+      eca.resizeEvent();
     }
   });
 

@@ -4,12 +4,17 @@ import * as ui from "./UI";
 // import { entry } from "../webpack.config";
 
 document.addEventListener("DOMContentLoaded", function (arg) {
-  // Initialize the simulator
-  (window as any).eca = eca.entry();
+  const canvasElement = document.getElementById("myCanvas") as HTMLCanvasElement;
+  if (!canvasElement) {
+    console.error("Canvas element 'myCanvas' not found");
+    return;
+  }
 
+  // Initialize the simulator
+  (window as any).eca = eca.entry(canvasElement);
 
   // Initialize all UI elements and event listeners
-  ui.initializeUI();
+  ui.initializeUI(canvasElement);
 });
 
 window.addEventListener("resize", eca.resizeEvent);

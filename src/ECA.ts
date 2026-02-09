@@ -93,6 +93,23 @@ class CanvasSpace {
     this.boundingRect = newBounds;
     this.width_per_rectangle = newBounds.width / this.width_count;
     this.height_per_rectangle = newBounds.height / this.height_count;
+    
+    // Update canvas pixel dimensions for the new size
+    const dpr = window.devicePixelRatio || 1;
+    const rect = this.canvasElement.getBoundingClientRect();
+    
+    // Only update if dimensions actually changed
+    const newPixelWidth = rect.width * dpr;
+    const newPixelHeight = rect.height * dpr;
+    
+    if (this.canvasElement.width !== newPixelWidth || this.canvasElement.height !== newPixelHeight) {
+      this.canvasElement.width = newPixelWidth;
+      this.canvasElement.height = newPixelHeight;
+      
+      // Reset context scale after canvas resize
+      this.ctx.imageSmoothingEnabled = false;
+      this.ctx.scale(dpr, dpr);
+    }
   }
 }
 
@@ -390,19 +407,15 @@ export function getRuleStateLabel(ruleKey: string, state: number): string {
   return `State ${state}`;
 }
 
-export function entry() {
-  const canvasElement = document.getElementById("myCanvas") as HTMLCanvasElement;
+export function entry(canvasElement: HTMLCanvasElement) {
   if (!canvasElement) {
-    console.error("Canvas element 'myCanvas' not found");
+    console.error("Canvas element not provided");
     return null;
   }
 
   const bounds = getCanvasBounds(canvasElement);
   ca = new CA(DIMENSIONORDERS[0], DIMENSIONORDERS[1], bounds, undefined, undefined, canvasElement);
   ca.redraw();
-
-  // Initialize stop button state to match STOP variable
-  updateStopButtonState();
 
   // Start render loop with requestAnimationFrame
   startRenderLoop();
@@ -442,7 +455,7 @@ function startRenderLoop() {
 
 //* EVENT HANDLERS *//
 
-export function resizeEvent(event: Event) {
+export function resizeEvent() {
   ca.redraw();
 }
 
@@ -475,38 +488,12 @@ export function toggleTickLoop() {
   if (STOP && tickLoopIntervalId) {
     clearInterval(tickLoopIntervalId);
     tickLoopIntervalId = null;
+    getDebugConfig().tickrateMonitor.reset(); // Show 0 TPS when paused
   } else if (!STOP && TICKRATE) {
     const ts = 1000.0 / TICKRATE;
     tickLoopIntervalId = setInterval(tickAction, ts);
     console.log(`tickloop at ${TICKRATE} / every ${ts}ms`);
   }
-  // Emit update event so UI can sync
-  try { window.dispatchEvent(new CustomEvent('eca:updated')); } catch (e) { }
-}
-
-/**
- * Update the stop button checkbox to match the current state
- */
-function updateStopButtonState() {
-  const stopButton = document.getElementById("stopButton") as HTMLInputElement;
-  if (stopButton) {
-    stopButton.checked = STOP;
-    if (STOP) {
-      getDebugConfig().tickrateMonitor.reset(); // Show 0 TPS when paused
-    }
-  }
-}
-
-export function triggerTickRateChange() {
-  // Backwards-compatible: if called with no args, read DOM (legacy)
-
-  const tickRateInput = document.getElementById('tickRate') as HTMLInputElement;
-  if(!tickRateInput) return;
-
-  const tickrate = tickRateInput ? parseInt(tickRateInput.value) : TICKRATE;
-  return setTickRate(tickrate);
-
-
 }
 
 export function setTickRate(newRate: number) {
@@ -520,7 +507,6 @@ export function setTickRate(newRate: number) {
     const ts = 1000.0 / TICKRATE;
     tickLoopIntervalId = setInterval(tickAction, ts);
   }
-  try { window.dispatchEvent(new CustomEvent('eca:updated')); } catch (e) { }
 }
 
 export function getTickRate(): number {
@@ -536,29 +522,13 @@ export function getTickCount(): number {
 }
 
 
-export function submitEvent(event: Event) {
-  event.preventDefault(); // Prevents the default page refresh
-  event.stopPropagation(); // Prevent event bubbling
-
-  // Remove focus from submit button to prevent spacebar from triggering it again
-  const submitButton = document.getElementById("submitButton") as HTMLInputElement;
-  if (submitButton) {
-    submitButton.blur();
-  } else {
-    console.error("submitButton not found");
-  }
-  // Handle form data with JavaScript
-  var height = parseInt((document.getElementById('height') as HTMLInputElement).value);
-  var width = parseInt((document.getElementById('width') as HTMLInputElement).value);
-
-
+export function submitDimensions(width: number, height: number, initialConfigStr: string, canvasElement: HTMLCanvasElement) {
   const prevNeighborhood = ca?.currentNeighborhoodType;
   const prevRule = ca?.currentRule;
 
-  initialConfig = (document.getElementById('initialConfig') as HTMLInputElement).value.split(',').map(Number);
+  initialConfig = initialConfigStr.split(',').map(Number);
   DIMENSIONORDERS = [width, height];
 
-  const canvasElement = document.getElementById("myCanvas") as HTMLCanvasElement;
   const bounds = getCanvasBounds(canvasElement);
 
   ca = new CA(
@@ -568,11 +538,7 @@ export function submitEvent(event: Event) {
     prevNeighborhood,  // Preserve neighborhood
     prevRule           // Preserve rule
   );
-  initialConfig = (document.getElementById('initialConfig') as HTMLInputElement).value.split(',').map(Number);
   ca.redraw();
-  try {
-    window.dispatchEvent(new CustomEvent('eca:created'));
-  } catch (e) { }
 }
 
 /**
@@ -587,12 +553,6 @@ export function switchNeighborhoodType(neighborhoodType: string) {
     const firstRuleKey = Object.keys(rulesForNeighborhood)[0];
     if (firstRuleKey) {
       ca.setRule(rulesForNeighborhood[firstRuleKey]);
-    }
-    // Emit an event so UI can update itself (avoids direct DOM manipulation here)
-    try {
-      window.dispatchEvent(new CustomEvent('eca:updated'));
-    } catch (e) {
-      // ignore in non-browser contexts
     }
     console.log(`Switched to neighborhood: ${type}`);
   } else {
@@ -609,32 +569,8 @@ export function switchRule(ruleKey: string) {
   if (rule) {
     ca.setRule(rule);
     console.log(`Switched to rule: ${rule.name}`);
-    try {
-      window.dispatchEvent(new CustomEvent('eca:updated'));
-    } catch (e) { }
   } else {
     console.error(`Rule ${ruleKey} not found for neighborhood ${ca.currentNeighborhoodType}`);
-  }
-}
-
-/**
- * Update the rule dropdown based on the selected neighborhood type
- */
-export function updateRuleOptions(neighborhoodType: NeighborhoodType) {
-  const rulesForNeighborhood = getRulesForNeighborhood(neighborhoodType);
-  const ruleSelect = document.getElementById('ruleSelect') as HTMLSelectElement;
-
-  if (!ruleSelect) return;
-
-  // Clear existing options
-  ruleSelect.innerHTML = '';
-
-  // Add new options
-  for (const [key, rule] of Object.entries(rulesForNeighborhood)) {
-    const option = document.createElement('option');
-    option.value = key;
-    option.textContent = rule.name;
-    ruleSelect.appendChild(option);
   }
 }
 
@@ -670,8 +606,5 @@ export function getCurrentCA(): CA | null {
 export function setCurrentCA(newCA: CA): void {
   ca = newCA;
   ca.redraw();
-  try {
-    window.dispatchEvent(new CustomEvent('eca:created'));
-  } catch (e) { }
 }
 
