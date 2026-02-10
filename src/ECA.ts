@@ -89,23 +89,42 @@ class CanvasSpace {
     }
   }
 
+  cheapDrawElements(ca: CA) {
+    // Draw dirty cells
+    for (const dirtyIndex of ca.getDirtyRects()) {
+      const position = ca.cellSpace.getPosition(dirtyIndex);
+      const state = ca.cellSpace.cells[dirtyIndex].state;
+
+      const x = this.boundingRect.left + position[1] * this.width_per_rectangle;
+      const y = this.boundingRect.top + position[0] * this.height_per_rectangle;
+      const w = this.width_per_rectangle;
+      const h = this.height_per_rectangle;
+
+      // Draw cell fill
+      const colorString = ca.currentRule.getColor(state);
+      this.ctx.fillStyle = colorString;
+      this.ctx.fillRect(x, y, w, h);
+      console.debug(`Redrew cell at index ${dirtyIndex} (position ${position}) with state ${state} and color ${colorString}`);
+    }
+  }
+
   updateBounds(newBounds: Bounds) {
     this.boundingRect = newBounds;
     this.width_per_rectangle = newBounds.width / this.width_count;
     this.height_per_rectangle = newBounds.height / this.height_count;
-    
+
     // Update canvas pixel dimensions for the new size
     const dpr = window.devicePixelRatio || 1;
     const rect = this.canvasElement.getBoundingClientRect();
-    
+
     // Only update if dimensions actually changed
     const newPixelWidth = rect.width * dpr;
     const newPixelHeight = rect.height * dpr;
-    
+
     if (this.canvasElement.width !== newPixelWidth || this.canvasElement.height !== newPixelHeight) {
       this.canvasElement.width = newPixelWidth;
       this.canvasElement.height = newPixelHeight;
-      
+
       // Reset context scale after canvas resize
       this.ctx.imageSmoothingEnabled = false;
       this.ctx.scale(dpr, dpr);
@@ -218,7 +237,7 @@ export class CA {
     const index = this.cellSpace.getIndex(position);
     if (this.cellSpace.cells[index].state !== state) {
       // this.cellSpace.cells[index].state = state;
-      this.cellSpace.cells[index] = new Cell(state);
+      this.cellSpace.cells[index].state = state;
       console.log(`Painted cell at position ${position} (index ${index}) with state ${state} \n
         Cell is now ${this.cellSpace.cells[index]}\n
         ${this.cellSpace.cells}`);
@@ -264,6 +283,12 @@ export class CA {
     this.canvasSpace.drawElements(this);
   }
 
+  cheapRedraw() {
+    const bounds = getCanvasBounds(this.canvasSpace.canvasElement);
+    this.canvasSpace.updateBounds(bounds);
+    this.canvasSpace.cheapDrawElements(this);
+  }
+
   /**
    * Mark a cell as dirty (changed)
    */
@@ -294,8 +319,7 @@ export class CA {
     // Update cells with computed states and track changes
     for (let i = 0; i < this.cellSpace.cells.length; i++) {
       if (this.cellSpace.cells[i].state !== this.nextStateBuffer[i]) {
-        this.cellSpace.cells[i] = new Cell(this.nextStateBuffer[i]);
-        // this.cellSpace.cells[i].state = this.nextStateBuffer[i];
+        this.cellSpace.cells[i].state = this.nextStateBuffer[i];
         this.markDirty(i);
       }
     }
@@ -438,7 +462,7 @@ function startRenderLoop() {
     } else {
       // When stopped, still redraw if there are pending changes (e.g., from painting)
       if (ca.getDirtyRects().size > 0) {
-        ca.redraw();
+        ca.cheapRedraw();
         ca.clearDirty();
       }
     }
