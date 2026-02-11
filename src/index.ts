@@ -1,6 +1,7 @@
 import * as _ from "lodash";
 import * as eca from "./ECA";
 import * as ui from "./UI";
+import * as debugTests from "./DebugTests";
 // import { entry } from "../webpack.config";
 
 document.addEventListener("DOMContentLoaded", function (arg) {
@@ -11,8 +12,9 @@ document.addEventListener("DOMContentLoaded", function (arg) {
   }
 
   // Initialize the simulator
-  (window as any).eca = eca.entry(canvasElement);
-
+  (window as any).ca = eca.entry(canvasElement);
+  (window as any).eca = eca;
+  (window as any).debugTests = debugTests;
   // Initialize all UI elements and event listeners
   ui.initializeUI(canvasElement);
 });

@@ -285,7 +285,6 @@ export class CA {
 
   cheapRedraw() {
     const bounds = getCanvasBounds(this.canvasSpace.canvasElement);
-    this.canvasSpace.updateBounds(bounds);
     this.canvasSpace.cheapDrawElements(this);
   }
 
@@ -620,6 +619,7 @@ export function canvasPointToCellPosition(coords: { x: number; y: number }): Vec
   }
   return null;
 }
+
 /**
  * Get the current CA instance for persistence operations
  */
