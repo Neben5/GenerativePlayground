@@ -105,7 +105,6 @@ class CanvasSpace {
       const colorString = ca.currentRule.getColor(state);
       this.ctx.fillStyle = colorString;
       this.ctx.fillRect(x, y, w, h);
-      console.debug(`Redrew cell at index ${dirtyIndex} (row ${row}, col ${col}) with state ${state} and color ${colorString}`);
     }
   }
 
