@@ -6,7 +6,6 @@
 import { NeighborhoodType } from "./CARule";
 import * as eca from "./ECA";
 import * as persistence from "./Persistence";
-import { Vector } from "@geometric/vector";
 import * as dat from 'dat.gui';
 import { getDebugConfig } from "./DebugConfig";
 

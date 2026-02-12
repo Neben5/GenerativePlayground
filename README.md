@@ -69,8 +69,6 @@ A cellular automata playground for exploring rule-based simulations and emergent
 - Chemical reactions
 
 **Interaction:**
-- State-based painting
-- Pattern presets
 - Visualization modes
 - Timeline scrubbing
 

@@ -1,4 +1,3 @@
-import { Vector } from "@geometric/vector";
 import { CellSpace, Cell } from "./Cells";
 import { CARule, NeighborhoodType } from "./CARule";
 import { getDebugConfig } from "./DebugConfig";
@@ -25,22 +24,24 @@ export class SandRule implements CARule {
   ruleName = "sand";
   neighborhoodType = NeighborhoodType.MOORE;
 
-  apply(cellSpace: CellSpace, position: Vector): number {
-    const self = this.getNeighbor(cellSpace, position, 0, 0).state;
-    const up = this.getNeighbor(cellSpace, position, -1, 0).state;
-    const upLeft = this.getNeighbor(cellSpace, position, -1, -1).state;
-    const upRight = this.getNeighbor(cellSpace, position, -1, 1).state;
-    const left = this.getNeighbor(cellSpace, position, 0, -1).state;
-    const right = this.getNeighbor(cellSpace, position, 0, 1).state;
-    const down = this.getNeighbor(cellSpace, position, 1, 0).state;
-    const downLeft = this.getNeighbor(cellSpace, position, 1, -1).state;
-    const downRight = this.getNeighbor(cellSpace, position, 1, 1).state;
+  static StaticCells = new Map<SandStates, Cell>(Object.entries(SandStates).map(([key, value]) => [value as SandStates, new Cell(value as SandStates)]));
+
+  apply(cellSpace: CellSpace, row: number, col: number): number {
+    const self = this.getNeighbor(cellSpace, row, col, 0, 0).state;
+    const up = this.getNeighbor(cellSpace, row, col, -1, 0).state;
+    const upLeft = this.getNeighbor(cellSpace, row, col, -1, -1).state;
+    const upRight = this.getNeighbor(cellSpace, row, col, -1, 1).state;
+    const left = this.getNeighbor(cellSpace, row, col, 0, -1).state;
+    const right = this.getNeighbor(cellSpace, row, col, 0, 1).state;
+    const down = this.getNeighbor(cellSpace, row, col, 1, 0).state;
+    const downLeft = this.getNeighbor(cellSpace, row, col, 1, -1).state;
+    const downRight = this.getNeighbor(cellSpace, row, col, 1, 1).state;
 
     if (getDebugConfig().getRuleIterationDebug())
-      console.log(`Neighborhood states at position ${position}: \n\
-        ${upLeft} ${up} ${upRight} :  (${position[0] - 1}, ${position[1] - 1})  (${position[0]}, ${position[1] - 1})  (${position[0] + 1}, ${position[1] - 1}) \n\
-        ${left} ${self} ${right} : (${position[0] - 1}, ${position[1]})  (${position[0]}, ${position[1]})  (${position[0] + 1}, ${position[1]}) \n\
-        ${downLeft} ${down} ${downRight} : (${position[0] - 1}, ${position[1] + 1})  (${position[0]}, ${position[1] + 1})  (${position[0] + 1}, ${position[1] + 1}) \n`);
+      console.log(`Neighborhood states at position ${row}, ${col}: \n\
+        ${upLeft} ${up} ${upRight} :  (${row - 1}, ${col - 1})  (${row}, ${col - 1})  (${row + 1}, ${col - 1}) \n\
+        ${left} ${self} ${right} : (${row - 1}, ${col})  (${row}, ${col})  (${row + 1}, ${col}) \n\
+        ${downLeft} ${down} ${downRight} : (${row - 1}, ${col + 1})  (${row}, ${col + 1})  (${row + 1}, ${col + 1}) \n`);
 
     switch (self) {
       case SandStates.EMPTY:
@@ -84,15 +85,15 @@ export class SandRule implements CARule {
     }
   }
 
-  private getNeighbor(cellSpace: CellSpace, position: Vector, dy: number, dx: number): Cell {
-    const ny = position[0] + dy;
-    const nx = position[1] + dx;
+  private getNeighbor(cellSpace: CellSpace, row: number, col: number, dy: number, dx: number): Cell {
+    const ny = row + dy;
+    const nx = col + dx;
 
     if (nx < 0 || nx >= cellSpace.dimensionOrders[0] || ny < 0 || ny >= cellSpace.dimensionOrders[1]) {
       // Boundary: return rock (solid wall)
-      return new Cell(SandStates.ROCK);
+      return SandRule.StaticCells.get(SandStates.ROCK) as Cell;
     }
-    return cellSpace.getCellAtIndex(cellSpace.getIndex(new Vector(ny, nx)));
+    return cellSpace.getCellAtRowCol(ny, nx);
   }
 
   /**

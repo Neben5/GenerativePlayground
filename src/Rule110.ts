@@ -1,5 +1,4 @@
-import { Vector } from "@geometric/vector";
-import { CellSpace, Cell, states } from "./Cells";
+import { CellSpace, Cell } from "./Cells";
 import { CARule, NeighborhoodType } from "./CARule";
 
 /**
@@ -15,10 +14,12 @@ export class Rule110 implements CARule {
   ruleName = "rule110";
   neighborhoodType = NeighborhoodType.ELEMENTARY;
 
-  apply(cellSpace: CellSpace, position: Vector): number {
-    const left = this.getNeighbor(cellSpace, position, -1).state;
-    const center = this.getNeighbor(cellSpace, position, 0).state;
-    const right = this.getNeighbor(cellSpace, position, 1).state;
+  private static EmptyCell = new Cell(0);
+
+  apply(cellSpace: CellSpace, row: number, col: number): number {
+    const left = this.getNeighbor(cellSpace, row, col, -1).state;
+    const center = this.getNeighbor(cellSpace, row, col, 0).state;
+    const right = this.getNeighbor(cellSpace, row, col, 1).state;
 
     // Wolfram Rule 110 lookup table
     const pattern = (left << 2) | (center << 1) | right;
@@ -26,14 +27,14 @@ export class Rule110 implements CARule {
     return lut[pattern];
   }
 
-  private getNeighbor(cellSpace: CellSpace, position: Vector, offset: number): Cell {
-    const nx = position[1] + offset;
+  private getNeighbor(cellSpace: CellSpace, row: number, col: number, offset: number): Cell {
+    const nx = col + offset;
 
     if (nx < 0 || nx >= cellSpace.dimensionOrders[0]) {
       // Boundary: return empty cell (0)
-      return new Cell(0);
+      return Rule110.EmptyCell;
     }
-    return cellSpace.getCellAtIndex(cellSpace.getIndex(new Vector(position[0], nx)));
+    return cellSpace.getCellAtRowCol(row, nx);
   }
 
   /**

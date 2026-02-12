@@ -1,4 +1,3 @@
-import { Vector } from "@geometric/vector";
 import { CellSpace } from "./Cells";
 
 /**
@@ -38,7 +37,7 @@ export abstract class CARule {
    * Apply the rule to compute the next state.
    * Rules are responsible for querying the cellSpace and handling boundaries.
    */
-  abstract apply(cellSpace: CellSpace, position: Vector): number;
+  abstract apply(cellSpace: CellSpace, row: number, col: number): number;
 
   /**
    * Get the display color for a given cell state.

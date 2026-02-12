@@ -1,5 +1,5 @@
-import { Vector } from "@geometric/vector";
 import * as eca from "./ECA";
+import type { Position2D } from "./Cells";
 
 type DebugTestResult = {
     name: string;
@@ -7,7 +7,7 @@ type DebugTestResult = {
     details?: string;
 };
 
-function getTestPositions(): Vector[] {
+function getTestPositions(): Position2D[] {
     const ca = eca.getCurrentCA();
     if (!ca) {
         return [];
@@ -18,11 +18,11 @@ function getTestPositions(): Vector[] {
     const midCol = Math.floor(maxCol / 2);
 
     return [
-        new Vector(0, 0),
-        new Vector(0, maxCol),
-        new Vector(maxRow, 0),
-        new Vector(maxRow, maxCol),
-        new Vector(midRow, midCol),
+        [0, 0],
+        [0, maxCol],
+        [maxRow, 0],
+        [maxRow, maxCol],
+        [midRow, midCol],
     ];
 }
 
@@ -38,7 +38,7 @@ function getTestState(): number {
     return states[states.length - 1];
 }
 
-function sampleCellColor(position: Vector): string | null {
+function sampleCellColor(position: Position2D): string | null {
     const ca = eca.getCurrentCA();
     if (!ca) {
         return null;
@@ -57,7 +57,7 @@ function sampleCellColor(position: Vector): string | null {
     return `rgba(${data[0]}, ${data[1]}, ${data[2]}, ${data[3]})`;
 }
 
-export function debugCompareCheapVsFull(position: Vector, state: number): {
+export function debugCompareCheapVsFull(position: Position2D, state: number): {
     match: boolean;
     fullColor: string | null;
     cheapColor: string | null;

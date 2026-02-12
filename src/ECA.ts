@@ -1,5 +1,4 @@
-import { Vector } from "@geometric/vector";
-import { CellSpace, Cell } from "./Cells";
+import { CellSpace, Cell, type Position2D } from "./Cells";
 import { CARule, NeighborhoodType, NEIGHBORHOOD_METADATA } from "./CARule";
 import { Rule110 } from "./Rule110";
 import { SandRule } from "./SandRule";
@@ -64,6 +63,7 @@ class CanvasSpace {
    */
   drawElements(ca: CA) {
     // Clear canvas
+    console.debug(`Redrawing entire canvas`);
     this.ctx.fillStyle = "white";
     this.ctx.fillRect(0, 0, this.canvasElement.width, this.canvasElement.height);
 
@@ -72,8 +72,7 @@ class CanvasSpace {
     for (var j = 0; j < this.width_count; j++) {
       // row loop
       for (var i = 0; i < this.height_count; i++) {
-        var position = new Vector(i, j);
-        var state = ca.getCell(position).state;
+        var state = ca.getCellAtRowCol(i, j).state;
 
         const x = this.boundingRect.left + j * this.width_per_rectangle;
         const y = this.boundingRect.top + i * this.height_per_rectangle;
@@ -91,12 +90,14 @@ class CanvasSpace {
 
   cheapDrawElements(ca: CA) {
     // Draw dirty cells
+    const width = ca.cellSpace.dimensionOrders[0];
     for (const dirtyIndex of ca.getDirtyRects()) {
-      const position = ca.cellSpace.getPosition(dirtyIndex);
+      const row = Math.floor(dirtyIndex / width);
+      const col = dirtyIndex - row * width;
       const state = ca.cellSpace.cells[dirtyIndex].state;
 
-      const x = this.boundingRect.left + position[1] * this.width_per_rectangle;
-      const y = this.boundingRect.top + position[0] * this.height_per_rectangle;
+      const x = this.boundingRect.left + col * this.width_per_rectangle;
+      const y = this.boundingRect.top + row * this.height_per_rectangle;
       const w = this.width_per_rectangle;
       const h = this.height_per_rectangle;
 
@@ -104,7 +105,7 @@ class CanvasSpace {
       const colorString = ca.currentRule.getColor(state);
       this.ctx.fillStyle = colorString;
       this.ctx.fillRect(x, y, w, h);
-      console.debug(`Redrew cell at index ${dirtyIndex} (position ${position}) with state ${state} and color ${colorString}`);
+      console.debug(`Redrew cell at index ${dirtyIndex} (row ${row}, col ${col}) with state ${state} and color ${colorString}`);
     }
   }
 
@@ -208,10 +209,12 @@ export class CA {
   }
 
   public getNextState(index: number): number {
-    const position = this.cellSpace.getPosition(index);
-    const ret = this.currentRule.apply(this.cellSpace, position);
+    const width = this.cellSpace.dimensionOrders[0];
+    const row = Math.floor(index / width);
+    const col = index - row * width;
+    const ret = this.currentRule.apply(this.cellSpace, row, col);
     if (getDebugConfig().getECAIterationDebug())
-      console.log(`Computed next state for cell with rule ${this.currentRule.name} at index ${index} (position ${position}): ${ret}`);
+      console.log(`Computed next state for cell with rule ${this.currentRule.name} at index ${index} (row ${row}, col ${col}): ${ret}`);
     return ret;
   }
 
@@ -221,15 +224,19 @@ export class CA {
    * @param position matrix-space (col, row) coordinate
    * @returns Cell at (position.0, position.1)
    */
-  public getCell(position: Vector): Cell {
-    return this.cellSpace.getCellAtIndex(this.cellSpace.getIndex(position));
+  public getCell(position: Position2D): Cell {
+    return this.getCellAtRowCol(position[0], position[1]);
+  }
+
+  public getCellAtRowCol(row: number, col: number): Cell {
+    return this.cellSpace.getCellAtRowCol(row, col);
   }
 
   /**
    * Paint a cell at the given position with the specified state.
    * Bypasses rule application and directly sets the cell state.
    */
-  public scuffCell(position: Vector, state: number): void {
+  public scuffCell(position: Position2D, state: number): void {
     if (!this.cellSpace.getPositionIsValid(position)) {
       console.warn(`Attempted to paint ${state} at invalid position ${position}, ignoring`);
       return; // Invalid position, do nothing
@@ -247,7 +254,7 @@ export class CA {
    * Accepts {x, y} coordinates in canvas space.
    * Returns null if the point is out of bounds.
    */
-  public canvasPointToCellPosition(coords: { x: number; y: number }): Vector | null {
+  public canvasPointToCellPosition(coords: { x: number; y: number }): Position2D | null {
     const bounds = this.canvasSpace.boundingRect;
 
     // Check if point is within canvas bounds
@@ -270,8 +277,8 @@ export class CA {
       return null;
     }
 
-    // Return as Vector (note: position format is [row, col] = [y, x] based on Cells.ts)
-    return new Vector(cellY, cellX);
+    // Return as [row, col] (note: position format is [row, col] = [y, x] based on Cells.ts)
+    return [cellY, cellX];
   }
 
   redraw() {
@@ -598,7 +605,7 @@ export function switchRule(ruleKey: string) {
  * Paint a cell at the given position with the specified state.
  * Exported wrapper for CA.paintCell()
  */
-export function paintCell(position: Vector, state: number): void {
+export function paintCell(position: Position2D, state: number): void {
   if (ca) {
     ca.scuffCell(position, state);
   } else {
@@ -610,7 +617,7 @@ export function paintCell(position: Vector, state: number): void {
  * Convert canvas coordinates to a cell grid position.
  * Exported wrapper for CA.canvasPointToCellPosition()
  */
-export function canvasPointToCellPosition(coords: { x: number; y: number }): Vector | null {
+export function canvasPointToCellPosition(coords: { x: number; y: number }): Position2D | null {
   if (ca) {
     return ca.canvasPointToCellPosition(coords);
   }

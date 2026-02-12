@@ -1,4 +1,5 @@
-import { Vector } from "@geometric/vector";
+export type Position = number[];
+export type Position2D = [number, number];
 
 export enum states {
   EMPTY = 0,
@@ -6,6 +7,7 @@ export enum states {
   COMPACTED_SAND = 2,
   ROCK = -1,
 }
+
 export class CellSpace {
 
 
@@ -52,13 +54,12 @@ export class CellSpace {
     console.log(`Initialized CellSpace with dimensionOrders ${dimensionOrders} and indexOrders ${this.indexOrders} to initial value ${this.cells.map((cell) => cell.state)}`);
   }
 
-
   /**
    * Get the array index for a given position in the matrix cell space
    * @param position matrix format (i,j) = (col, row) position
    * @returns array index
    */
-  getIndex(position: Vector): number {
+  getIndex(position: Position): number {
     if (position.length != this.dimensionOrders.length) {
       throw new DimensionError(
         `Position dimension ${position.length} does not match cell space dimension ${this.dimensionOrders.length}`
@@ -73,15 +74,32 @@ export class CellSpace {
     return index
   }
 
-  getPosition(index: number): Vector {
-    let position = new Vector(this.dimensionOrders.length);
+  getIndexRC(row: number, col: number): number {
+    if (this.dimensionOrders.length !== 2) {
+      throw new DimensionError(
+        `getIndexRC requires 2D cell space, got ${this.dimensionOrders.length}D`
+      );
+    }
+    return row * this.indexOrders[1] + col * this.indexOrders[0];
+  }
+
+  getPosition(index: number): Position {
+    const position = new Array<number>(this.dimensionOrders.length);
+    return this.getPositionInto(index, position);
+  }
+
+  getPositionInto(index: number, out: Position): Position {
     let indexRemaining = index;
-    for (let dim = position.length - 1; dim >= 0; dim--) {
-      position[position.length - 1 - dim] = Math.floor(indexRemaining / this.indexOrders[dim]);
+    const dims = this.dimensionOrders.length;
+    if (out.length !== dims) {
+      out.length = dims;
+    }
+    for (let dim = dims - 1; dim >= 0; dim--) {
+      out[dims - 1 - dim] = Math.floor(indexRemaining / this.indexOrders[dim]);
       indexRemaining %= this.indexOrders[dim];
     }
     // console.debug(`Got position ${position} for index ${index}`);
-    return position;
+    return out;
   }
 
   /**
@@ -98,7 +116,11 @@ export class CellSpace {
     return this.cells[index];
   }
 
-  getPositionIsValid(position: Vector): boolean {
+  getCellAtRowCol(row: number, col: number): Cell {
+    return this.getCellAtIndex(this.getIndexRC(row, col));
+  }
+
+  getPositionIsValid(position: Position): boolean {
     if (position.length != this.dimensionOrders.length) {
       return false;
     }
@@ -110,52 +132,6 @@ export class CellSpace {
     return true;
   }
 
-  /**
-   * Get the elementary neighborhood of a position. For 1D, this is the cell itself and its left and right neighbors. 
-   * For higher dimensions, this is the cell itself and its neighbors in each dimension.
-   * @param position 
-   * @returns 
-   */
-  elementaryNeighborhood(position: Vector, outputArray?: Cell[]): Cell[] {
-    const neighborhood = outputArray || new Array(3);
-    const offsets = [-1, 0, 1];
-    for (let i = 0; i < 3; i++) {
-      const offset = offsets[i];
-      const neighborPos = position[1] + offset;
-      if (neighborPos < 0 || neighborPos >= this.dimensionOrders[1]) {
-        neighborhood[i] = this.getCellAtIndex(this.getIndex(position));
-      } else {
-        const idx = position[0] * this.indexOrders[1] + neighborPos;
-        neighborhood[i] = this.cells[idx];
-      }
-    }
-    return neighborhood;
-  }
-
-  threesquareNeighborhood(position: Vector, outputArray?: Cell[]): Cell[] {
-    const neighborhood = outputArray || new Array(9);
-    const offsets = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1]];
-    const x = position[0];
-    const y = position[1];
-    let idx = 0;
-    for (const offset of offsets) {
-      const nx = x + offset[0];
-      const ny = y + offset[1];
-      if (nx < 0 || nx >= this.dimensionOrders[0] || ny < 0 || ny >= this.dimensionOrders[1]) {
-        neighborhood[idx] = this.cells[this.getIndex(position)];
-      } else {
-        const cellIdx = nx * this.indexOrders[1] + ny;
-        neighborhood[idx] = this.cells[cellIdx];
-      }
-      idx++;
-    }
-    return neighborhood;
-  }
-
-  getNeighborhood(index: number): Cell[] {
-    return this.threesquareNeighborhood(this.getPosition(index));
-  }
-
 }
 
 export class Cell {
@@ -165,6 +141,7 @@ export class Cell {
     this.state = state;
   }
 }
+
 export class DimensionError extends Error {
   constructor(msg: string) {
     super(msg);
@@ -177,6 +154,7 @@ export class DimensionError extends Error {
     return "hello " + this.message;
   }
 }
+
 export class IndexOutOfBoundsError extends Error {
   constructor(msg: string) {
     super(msg);
