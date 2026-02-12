@@ -238,9 +238,6 @@ export class CA {
     if (this.cellSpace.cells[index].state !== state) {
       // this.cellSpace.cells[index].state = state;
       this.cellSpace.cells[index].state = state;
-      console.log(`Painted cell at position ${position} (index ${index}) with state ${state} \n
-        Cell is now ${this.cellSpace.cells[index]}\n
-        ${this.cellSpace.cells}`);
       this.markDirty(index);
     }
   }
