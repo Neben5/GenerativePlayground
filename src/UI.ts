@@ -176,8 +176,8 @@ function initializeDatGUI() {
   paintFolder.add(config, 'paintbrushMode').name('Paintbrush Mode').onChange((value: boolean) => {
     isPaintbrushActive = value;
     if (isPaintbrushActive && eca.isRunning()) {
-      eca.toggleTickLoop();
-      config.paused = true;
+      // eca.toggleTickLoop();
+      // config.paused = false;
       // Update GUI to reflect pause
       gui?.updateDisplay();
     }
@@ -504,7 +504,6 @@ function initializePaintbrushMouseHandlers() {
  */
 function paintAtPoint(coords: { x: number; y: number }) {
   const cellPosition = eca.canvasPointToCellPosition(coords);
-  console.debug(`Painting ${currentPaintState} at canvas coordinates (${coords.x}, ${coords.y}), which maps to cell position ${cellPosition}`);
   if (cellPosition !== null) {
     eca.paintCell(cellPosition, currentPaintState);
   }

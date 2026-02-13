@@ -1,6 +1,11 @@
 import { CellSpace, Cell } from "./Cells";
 import { CARule, NeighborhoodType } from "./CARule";
 
+export enum Rule110States {
+  OFF = 0,
+  ON = 1,
+}
+
 /**
  * Wolfram's Rule 110 - Elementary Cellular Automaton
  * Works with 1D neighborhoods (left, center, right)
@@ -16,7 +21,9 @@ export class Rule110 implements CARule {
 
   private static EmptyCell = new Cell(0);
 
-  apply(cellSpace: CellSpace, row: number, col: number): number {
+  static StaticCells = new Map<Rule110States, Cell>(Object.entries(Rule110States).map(([key, value]) => [value as Rule110States, new Cell(value as Rule110States)]));
+
+  apply(cellSpace: CellSpace, row: number, col: number): Cell {
     const left = this.getNeighbor(cellSpace, row, col, -1).state;
     const center = this.getNeighbor(cellSpace, row, col, 0).state;
     const right = this.getNeighbor(cellSpace, row, col, 1).state;
@@ -24,7 +31,7 @@ export class Rule110 implements CARule {
     // Wolfram Rule 110 lookup table
     const pattern = (left << 2) | (center << 1) | right;
     const lut = [0, 1, 1, 1, 0, 1, 1, 0]; // Rule 110 in binary: 01101110
-    return lut[pattern];
+    return Rule110.StaticCells.get(lut[pattern] as Rule110States) as Cell;
   }
 
   private getNeighbor(cellSpace: CellSpace, row: number, col: number, offset: number): Cell {

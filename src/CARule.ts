@@ -1,4 +1,4 @@
-import { CellSpace } from "./Cells";
+import { Cell, CellSpace } from "./Cells";
 
 /**
  * Types of neighborhoods available in the system
@@ -37,7 +37,7 @@ export abstract class CARule {
    * Apply the rule to compute the next state.
    * Rules are responsible for querying the cellSpace and handling boundaries.
    */
-  abstract apply(cellSpace: CellSpace, row: number, col: number): number;
+  abstract apply(cellSpace: CellSpace, row: number, col: number): Cell;
 
   /**
    * Get the display color for a given cell state.

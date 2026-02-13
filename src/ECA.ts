@@ -15,7 +15,7 @@ var caCount = 0;
 var POSSIBLESTATES = 2;
 var DIMENSIONORDERS = [8, 2];
 var TICKRATE = 60;
-var STOP = true;
+var STOP = false;
 
 var tickLoopIntervalId: NodeJS.Timeout = null;
 var renderLoopId: number = null; // requestAnimationFrame ID
@@ -155,10 +155,8 @@ export class CA {
   currentNeighborhoodType: NeighborhoodType;
   public caCount: number = caCount++;
   // Reusable state arrays to avoid allocations during iteration
-  private stateBuffer1: number[];
-  private stateBuffer2: number[];
-  private currentStateBuffer: number[];
-  private nextStateBuffer: number[];
+  private currentStateBuffer: Cell[];
+  private nextStateBuffer: Cell[];
 
   // Dirty-rect tracking for optimization
   private dirtyRects: Set<number> = new Set(); // Set of cell indices that changed
@@ -186,10 +184,7 @@ export class CA {
 
     // Allocate state buffers once
     const bufferSize = this.cellSpace.cells.length;
-    this.stateBuffer1 = new Array(bufferSize);
-    this.stateBuffer2 = new Array(bufferSize);
-    this.currentStateBuffer = this.stateBuffer1;
-    this.nextStateBuffer = this.stateBuffer2;
+    this.nextStateBuffer =  new Array(bufferSize);
   }
 
   public setNeighborhoodType(type: NeighborhoodType) {
@@ -207,7 +202,7 @@ export class CA {
     }
   }
 
-  public getNextState(index: number): number {
+  public getNextState(index: number): Cell {
     const width = this.cellSpace.dimensionOrders[0];
     const row = Math.floor(index / width);
     const col = index - row * width;
@@ -287,7 +282,6 @@ export class CA {
   }
 
   cheapRedraw() {
-    const bounds = getCanvasBounds(this.canvasSpace.canvasElement);
     this.canvasSpace.cheapDrawElements(this);
   }
 
@@ -313,22 +307,21 @@ export class CA {
   }
 
   iterate() {
-    this.currentStateBuffer = this.cellSpace.cells.map(cell => cell.state);
+    this.currentStateBuffer = this.cellSpace.cells; // Point to current cell states
     // Compute next states into the next state buffer
     for (let i = 0; i < this.cellSpace.cells.length; i++) {
       this.nextStateBuffer[i] = this.getNextState(i);
     }
     // Update cells with computed states and track changes
     for (let i = 0; i < this.cellSpace.cells.length; i++) {
-      if (this.cellSpace.cells[i].state !== this.nextStateBuffer[i]) {
-        this.cellSpace.cells[i].state = this.nextStateBuffer[i];
+      if (this.currentStateBuffer[i].state !== this.nextStateBuffer[i].state) {
+        // Since drawing is asynchronous, we need to update the cell state in the relevant buffer
+        // *before* marking dirty, so that the correct state is reflected when the dirty cell is drawn
+        // this means that we would have to do a dirty cache if we want to buffer swap.
+        this.currentStateBuffer[i].state = this.nextStateBuffer[i].state;
         this.markDirty(i);
       }
     }
-    // Swap buffers for next iteration (no allocation)
-    const temp = this.currentStateBuffer;
-    this.currentStateBuffer = this.nextStateBuffer;
-    this.nextStateBuffer = temp;
     if (getDebugConfig().getECAIterationDebug()) {
       console.log(this.cellSpace.cells.map((cell) => cell.state));
       console.log(`Iterated`);
@@ -455,20 +448,8 @@ export function entry(canvasElement: HTMLCanvasElement) {
  */
 function startRenderLoop() {
   function renderFrame() {
-    if (!STOP) {
-      // Render only if dirty rects exist or full redraw needed
-      if (ca.getDirtyRects().size > 0) {
-        ca.redraw();
-        ca.clearDirty();
-      }
-    } else {
-      // When stopped, still redraw if there are pending changes (e.g., from painting)
-      if (ca.getDirtyRects().size > 0) {
-        ca.cheapRedraw();
-        ca.clearDirty();
-      }
-    }
-
+    ca.cheapRedraw();
+    ca.clearDirty();
     // Track framerate
     getDebugConfig().framerateMonitor.tick();
 

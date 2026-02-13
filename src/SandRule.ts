@@ -26,7 +26,7 @@ export class SandRule implements CARule {
 
   static StaticCells = new Map<SandStates, Cell>(Object.entries(SandStates).map(([key, value]) => [value as SandStates, new Cell(value as SandStates)]));
 
-  apply(cellSpace: CellSpace, row: number, col: number): number {
+  apply(cellSpace: CellSpace, row: number, col: number): Cell {
     const self = this.getNeighbor(cellSpace, row, col, 0, 0).state;
     const up = this.getNeighbor(cellSpace, row, col, -1, 0).state;
     const upLeft = this.getNeighbor(cellSpace, row, col, -1, -1).state;
@@ -46,43 +46,46 @@ export class SandRule implements CARule {
     switch (self) {
       case SandStates.EMPTY:
         if (up == SandStates.SAND) {
-          return SandStates.SAND;
+          return this.getStaticCell(SandStates.SAND);
         }
         if (upRight == SandStates.SAND && right != SandStates.EMPTY && up == SandStates.EMPTY) {
-          return SandStates.SAND;
+          return this.getStaticCell(SandStates.SAND);
         }
         if (left == SandStates.COMPACTED_SAND && upLeft == SandStates.SAND && downLeft != SandStates.EMPTY) {
-          return SandStates.SAND;
+          return this.getStaticCell(SandStates.SAND);
         }
-        return SandStates.EMPTY;
+        return this.getStaticCell(SandStates.EMPTY);
       case SandStates.SAND:
         if (down == SandStates.EMPTY) {
-          return SandStates.EMPTY;
+          return this.getStaticCell(SandStates.EMPTY);
         }
         if (downLeft == SandStates.EMPTY && left == SandStates.EMPTY) {
-          return SandStates.EMPTY;
+          return this.getStaticCell(SandStates.EMPTY);
         }
         if (down && (up == SandStates.SAND || up == SandStates.COMPACTED_SAND)) {
-          return SandStates.COMPACTED_SAND;
+          return this.getStaticCell(SandStates.COMPACTED_SAND);
         }
         if (down == SandStates.COMPACTED_SAND && right == SandStates.EMPTY && downRight == SandStates.EMPTY) {
-          return SandStates.EMPTY;
+          return this.getStaticCell(SandStates.EMPTY);
         }
-        return SandStates.SAND;
+        return this.getStaticCell(SandStates.SAND);
       case SandStates.COMPACTED_SAND:
         if (down == SandStates.EMPTY) {
-          return SandStates.SAND;
+          return this.getStaticCell(SandStates.SAND);
         }
         if (down == SandStates.SAND) {
-          return SandStates.SAND;
+          return this.getStaticCell(SandStates.SAND);
         }
         if (up == SandStates.EMPTY || up == SandStates.ROCK) {
-          return SandStates.SAND;
+          return this.getStaticCell(SandStates.SAND);
         }
-        return SandStates.COMPACTED_SAND;
+        return this.getStaticCell(SandStates.COMPACTED_SAND);
       case SandStates.ROCK:
-        return SandStates.ROCK;
+        return this.getStaticCell(SandStates.ROCK);
     }
+  }
+  private getStaticCell(state: SandStates): Cell {
+    return SandRule.StaticCells.get(state);
   }
 
   private getNeighbor(cellSpace: CellSpace, row: number, col: number, dy: number, dx: number): Cell {
@@ -91,7 +94,7 @@ export class SandRule implements CARule {
 
     if (nx < 0 || nx >= cellSpace.dimensionOrders[0] || ny < 0 || ny >= cellSpace.dimensionOrders[1]) {
       // Boundary: return rock (solid wall)
-      return SandRule.StaticCells.get(SandStates.ROCK) as Cell;
+      return SandRule.StaticCells.get(SandStates.ROCK);
     }
     return cellSpace.getCellAtRowCol(ny, nx);
   }
