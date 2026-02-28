@@ -29,7 +29,7 @@ The current simulation engine is structured around per-cell ticking, but the tar
 |---|---|---|---|---|
 | PR1 | Test Foundation and CI Gate | Complete | Vitest setup, baseline tests, CI test gate | [docs/PR1_Handoff.md](docs/PR1_Handoff.md) |
 | PR2 | Dual Interfaces and Compatibility | Complete | Neighborhood-step interfaces, iterate dual path, parity tests | [docs/PR2_Handoff.md](docs/PR2_Handoff.md) |
-| PR3 | Neighborhood Scheduler Core | Planned | Scheduler/commit robustness, parity retention | [docs/PR3_Handoff.md](docs/PR3_Handoff.md) |
+| PR3 | Neighborhood Scheduler Core | Complete | Scheduler/commit robustness, parity retention | [docs/PR3_Handoff.md](docs/PR3_Handoff.md) |
 | PR4 | Deterministic Modified Margolus Rule | Planned | New rule integration, phase cycle, persistence checks | [docs/PR4_Handoff.md](docs/PR4_Handoff.md) |
 | PR5 | Benchmark Harness and Baseline | Planned | `bench` commands, artifact schema, CI smoke benchmark | [docs/PR5_Handoff.md](docs/PR5_Handoff.md) |
 | PR6 | Hilbert Prototype (Benchmark-Only) | Planned | Hilbert adapter prototype, measured comparison, recommendation | [docs/PR6_Handoff.md](docs/PR6_Handoff.md) |
@@ -52,4 +52,4 @@ The current simulation engine is structured around per-cell ticking, but the tar
 - Overstating Hilbert gains without reproducible benchmark controls.
 
 ## Next Action
-Execute PR3 according to [docs/PR3_Handoff.md](docs/PR3_Handoff.md) and keep this tracker updated as PR status changes.
+Execute PR4 according to [docs/PR4_Handoff.md](docs/PR4_Handoff.md) and keep this tracker updated as PR status changes.

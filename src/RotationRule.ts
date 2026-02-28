@@ -20,8 +20,9 @@ export enum RotationStates {
  * Blocks with zero or two-or-more particles are left unchanged so that
  * particle count is conserved.
  *
- * This produces a visually interesting circular-motion effect and is easy
- * to reason about in unit tests.
+ * Null cell positions (boundary/out-of-bounds) are treated as empty,
+ * immovable walls: a particle cannot rotate into a null position and
+ * instead remains in place.
  *
  * Block layout:
  *   tl tr
@@ -35,52 +36,45 @@ export class RotationRule extends MargolusRule {
   static RuleName = "rotation";
   ruleName = "rotation";
 
-  private static readonly CELLS = new Map<RotationStates, Cell>([
-    [RotationStates.EMPTY, new Cell(RotationStates.EMPTY)],
-    [RotationStates.PARTICLE, new Cell(RotationStates.PARTICLE)],
-  ]);
-
-  private static cell(state: RotationStates): Cell {
-    return RotationRule.CELLS.get(state)!;
-  }
-
   applyToBlock(
-    tl: Cell,
-    tr: Cell,
-    bl: Cell,
-    br: Cell,
+    tl: Cell | null,
+    tr: Cell | null,
+    bl: Cell | null,
+    br: Cell | null,
     tick: number,
-  ): [Cell, Cell, Cell, Cell] {
-    const a = tl.state as RotationStates;
-    const b = tr.state as RotationStates;
-    const c = bl.state as RotationStates;
-    const d = br.state as RotationStates;
+  ): [number, number, number, number] {
+    // Read states; treat null (boundary) as EMPTY.
+    const a = tl?.state ?? RotationStates.EMPTY;
+    const b = tr?.state ?? RotationStates.EMPTY;
+    const c = bl?.state ?? RotationStates.EMPTY;
+    const d = br?.state ?? RotationStates.EMPTY;
 
     const count = (a === RotationStates.PARTICLE ? 1 : 0)
                 + (b === RotationStates.PARTICLE ? 1 : 0)
                 + (c === RotationStates.PARTICLE ? 1 : 0)
                 + (d === RotationStates.PARTICLE ? 1 : 0);
 
-    // Only rotate when there is exactly one particle (preserves reversibility)
+    // Only rotate when there is exactly one particle (preserves reversibility).
     if (count !== 1) {
-      return [tl, tr, bl, br];
+      return [a, b, c, d];
     }
 
-    const E = RotationRule.cell(RotationStates.EMPTY);
-    const P = RotationRule.cell(RotationStates.PARTICLE);
+    const E = RotationStates.EMPTY;
+    const P = RotationStates.PARTICLE;
 
     if (tick % 2 === 0) {
       // Clockwise: tl→tr, tr→br, br→bl, bl→tl
-      if (a === RotationStates.PARTICLE) return [E, P, E, E]; // tl → tr
-      if (b === RotationStates.PARTICLE) return [E, E, E, P]; // tr → br
-      if (d === RotationStates.PARTICLE) return [E, E, P, E]; // br → bl
-      /* c */                            return [P, E, E, E]; // bl → tl
+      // If the destination is a boundary (null), the particle stays in place.
+      if (a === P) return tr !== null ? [E, P, c, d] : [a, b, c, d]; // tl → tr
+      if (b === P) return br !== null ? [a, E, c, P] : [a, b, c, d]; // tr → br
+      if (d === P) return bl !== null ? [a, b, P, E] : [a, b, c, d]; // br → bl
+      /* c === P */ return tl !== null ? [P, b, E, d] : [a, b, c, d]; // bl → tl
     } else {
       // Counter-clockwise: tl→bl, bl→br, br→tr, tr→tl
-      if (a === RotationStates.PARTICLE) return [E, E, P, E]; // tl → bl
-      if (c === RotationStates.PARTICLE) return [E, E, E, P]; // bl → br
-      if (d === RotationStates.PARTICLE) return [E, P, E, E]; // br → tr
-      /* b */                            return [P, E, E, E]; // tr → tl
+      if (a === P) return bl !== null ? [E, b, P, d] : [a, b, c, d]; // tl → bl
+      if (c === P) return br !== null ? [a, b, E, P] : [a, b, c, d]; // bl → br
+      if (d === P) return tr !== null ? [a, P, c, E] : [a, b, c, d]; // br → tr
+      /* b === P */ return tl !== null ? [P, E, c, d] : [a, b, c, d]; // tr → tl
     }
   }
 

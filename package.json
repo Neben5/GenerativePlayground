@@ -1,8 +1,7 @@
 {
   "dependencies": {
     "@types/lodash": "^4.14.202",
-    "paper": "^0.12.18",
-    "safer-buffer": "^2.1.2"
+    "paper": "^0.12.18"
   },
   "devDependencies": {
     "@types/dat.gui": "^0.7.13",

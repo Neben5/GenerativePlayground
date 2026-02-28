@@ -163,9 +163,6 @@ export class CA {
   // Dirty-rect tracking for optimization
   private dirtyRects: Set<number> = new Set(); // Set of cell indices that changed
 
-  // Tick counter — used by Margolus rules to select block partition phase
-  private tickCount: number = 0;
-
   constructor(
     num_rectangles_wide: number,
     num_rectangles_tall: number,
