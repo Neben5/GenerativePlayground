@@ -1,5 +1,5 @@
 import { CellSpace, Cell, type Position2D } from "./Cells";
-import { CARule, NeighborhoodType, NEIGHBORHOOD_METADATA } from "./CARule";
+import { CARule, isNeighborhoodStepRule, NeighborhoodType, NEIGHBORHOOD_METADATA, type NeighborhoodWrite } from "./CARule";
 import { Rule110 } from "./Rule110";
 import { SandRule } from "./SandRule";
 import { getDebugConfig } from "./DebugConfig";
@@ -157,6 +157,7 @@ export class CA {
   // Reusable state arrays to avoid allocations during iteration
   private currentStateBuffer: Cell[];
   private nextStateBuffer: Cell[];
+  private iterationCount: number = 0;
 
   // Dirty-rect tracking for optimization
   private dirtyRects: Set<number> = new Set(); // Set of cell indices that changed
@@ -307,24 +308,46 @@ export class CA {
   }
 
   iterate() {
-    this.currentStateBuffer = this.cellSpace.cells; // Point to current cell states
-    // Compute next states into the next state buffer
-    for (let i = 0; i < this.cellSpace.cells.length; i++) {
-      this.nextStateBuffer[i] = this.getNextState(i);
-    }
-    // Update cells with computed states and track changes
-    for (let i = 0; i < this.cellSpace.cells.length; i++) {
-      if (this.currentStateBuffer[i].state !== this.nextStateBuffer[i].state) {
-        // Since drawing is asynchronous, we need to update the cell state in the relevant buffer
-        // *before* marking dirty, so that the correct state is reflected when the dirty cell is drawn
-        // this means that we would have to do a dirty cache if we want to buffer swap.
-        this.currentStateBuffer[i].state = this.nextStateBuffer[i].state;
-        this.markDirty(i);
+    if (isNeighborhoodStepRule(this.currentRule)) {
+      const writes = this.currentRule.applyNeighborhood(this.cellSpace, {
+        tick: this.iterationCount,
+        width: this.cellSpace.dimensionOrders[0],
+        height: this.cellSpace.dimensionOrders[1],
+      });
+      this.applyWriteBatch(writes);
+    } else {
+      this.currentStateBuffer = this.cellSpace.cells; // Point to current cell states
+      // Compute next states into the next state buffer
+      for (let i = 0; i < this.cellSpace.cells.length; i++) {
+        this.nextStateBuffer[i] = this.getNextState(i);
+      }
+      // Update cells with computed states and track changes
+      for (let i = 0; i < this.cellSpace.cells.length; i++) {
+        if (this.currentStateBuffer[i].state !== this.nextStateBuffer[i].state) {
+          // Since drawing is asynchronous, we need to update the cell state in the relevant buffer
+          // *before* marking dirty, so that the correct state is reflected when the dirty cell is drawn
+          // this means that we would have to do a dirty cache if we want to buffer swap.
+          this.currentStateBuffer[i].state = this.nextStateBuffer[i].state;
+          this.markDirty(i);
+        }
       }
     }
+    this.iterationCount += 1;
     if (getDebugConfig().getECAIterationDebug()) {
       console.log(this.cellSpace.cells.map((cell) => cell.state));
       console.log(`Iterated`);
+    }
+  }
+
+  private applyWriteBatch(writes: NeighborhoodWrite[]): void {
+    for (const write of writes) {
+      if (write.index < 0 || write.index >= this.cellSpace.cells.length) {
+        continue;
+      }
+      if (this.cellSpace.cells[write.index].state !== write.state) {
+        this.cellSpace.cells[write.index].state = write.state;
+        this.markDirty(write.index);
+      }
     }
   }
 

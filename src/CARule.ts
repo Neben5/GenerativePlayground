@@ -57,3 +57,22 @@ export abstract class CARule {
    */
   abstract getStateLabel(state: number): string;
 }
+
+export interface NeighborhoodStepContext {
+  tick: number;
+  width: number;
+  height: number;
+}
+
+export interface NeighborhoodWrite {
+  index: number;
+  state: number;
+}
+
+export interface NeighborhoodStepRule {
+  applyNeighborhood(cellSpace: CellSpace, context: NeighborhoodStepContext): NeighborhoodWrite[];
+}
+
+export function isNeighborhoodStepRule(rule: CARule): rule is CARule & NeighborhoodStepRule {
+  return typeof (rule as CARule & Partial<NeighborhoodStepRule>).applyNeighborhood === "function";
+}
