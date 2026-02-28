@@ -64,42 +64,21 @@ export abstract class CARule {
   abstract getStateLabel(state: number): string;
 }
 
-/**
- * Abstract base class for Margolus neighborhood rules.
- *
- * Margolus rules operate on 2×2 blocks rather than individual cells.
- * On even ticks the grid is partitioned into non-overlapping 2×2 blocks
- * starting at (0,0); on odd ticks the partition is shifted by (1,1).
- * Each block is updated atomically by `applyToBlock`.
- */
-export abstract class MargolusRule extends CARule {
-  readonly neighborhoodType = NeighborhoodType.MARGOLUS;
+export interface NeighborhoodStepContext {
+  tick: number;
+  width: number;
+  height: number;
+}
 
-  /**
-   * Apply the rule to a single 2×2 block.
-   *
-   * @param tl  Cell at top-left of block
-   * @param tr  Cell at top-right of block
-   * @param bl  Cell at bottom-left of block
-   * @param br  Cell at bottom-right of block
-   * @param tick  Current tick index (even vs. odd selects partition phase)
-   * @returns New states as [topLeft, topRight, bottomLeft, bottomRight]
-   */
-  abstract applyToBlock(
-    tl: Cell,
-    tr: Cell,
-    bl: Cell,
-    br: Cell,
-    tick: number,
-  ): [Cell, Cell, Cell, Cell];
+export interface NeighborhoodWrite {
+  index: number;
+  state: number;
+}
 
-  /**
-   * Not used for Margolus rules — iteration is performed block-wise via
-   * `applyToBlock`.  Throws if called accidentally.
-   */
-  apply(_cellSpace: CellSpace, _row: number, _col: number): Cell {
-    throw new Error(
-      "MargolusRule.apply() is not supported; use applyToBlock() via iterateMargolus()"
-    );
-  }
+export interface NeighborhoodStepRule {
+  applyNeighborhood(cellSpace: CellSpace, context: NeighborhoodStepContext): NeighborhoodWrite[];
+}
+
+export function isNeighborhoodStepRule(rule: CARule): rule is CARule & NeighborhoodStepRule {
+  return typeof (rule as CARule & Partial<NeighborhoodStepRule>).applyNeighborhood === "function";
 }
