@@ -1,6 +1,9 @@
 compile/*
 !compile/index.js
 
+# Test build artifacts
+dist-test/
+
 # Logs
 logs
 *.log

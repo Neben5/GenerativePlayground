@@ -1,7 +1,8 @@
 import { CellSpace, Cell, type Position2D } from "./Cells";
-import { CARule, NeighborhoodType, NEIGHBORHOOD_METADATA } from "./CARule";
+import { CARule, MargolusRule, NeighborhoodType, NEIGHBORHOOD_METADATA } from "./CARule";
 import { Rule110 } from "./Rule110";
 import { SandRule } from "./SandRule";
+import { RotationRule } from "./RotationRule";
 import { getDebugConfig } from "./DebugConfig";
 
 // Simple Bounds interface to replace Paper.js Rectangle
@@ -161,6 +162,9 @@ export class CA {
   // Dirty-rect tracking for optimization
   private dirtyRects: Set<number> = new Set(); // Set of cell indices that changed
 
+  // Tick counter — used by Margolus rules to select block partition phase
+  private tickCount: number = 0;
+
   constructor(
     num_rectangles_wide: number,
     num_rectangles_tall: number,
@@ -307,6 +311,18 @@ export class CA {
   }
 
   iterate() {
+    if (this.currentRule instanceof MargolusRule) {
+      this.iterateMargolus();
+    } else {
+      this.iteratePerCell();
+    }
+    this.tickCount++;
+  }
+
+  /**
+   * Standard per-cell iteration for Moore and Elementary neighborhood rules.
+   */
+  private iteratePerCell() {
     this.currentStateBuffer = this.cellSpace.cells; // Point to current cell states
     // Compute next states into the next state buffer
     for (let i = 0; i < this.cellSpace.cells.length; i++) {
@@ -328,6 +344,52 @@ export class CA {
     }
   }
 
+  /**
+   * Per-neighborhood (block) iteration for Margolus rules.
+   *
+   * Partitions the grid into non-overlapping 2×2 blocks.  The offset
+   * alternates each tick (even → origin at (0,0); odd → origin at (1,1))
+   * so that every cell participates in a block on every other tick.
+   * Each block is updated atomically by the rule's `applyToBlock` method.
+   */
+  private iterateMargolus() {
+    const rule = this.currentRule as MargolusRule;
+    const width = this.cellSpace.dimensionOrders[0];
+    const height = this.cellSpace.dimensionOrders[1];
+    const offset = this.tickCount % 2; // 0 on even ticks, 1 on odd ticks
+
+    for (let row = offset; row + 1 < height; row += 2) {
+      for (let col = offset; col + 1 < width; col += 2) {
+        const tlIdx = this.cellSpace.getIndexRC(row,     col);
+        const trIdx = this.cellSpace.getIndexRC(row,     col + 1);
+        const blIdx = this.cellSpace.getIndexRC(row + 1, col);
+        const brIdx = this.cellSpace.getIndexRC(row + 1, col + 1);
+
+        const tl = this.cellSpace.cells[tlIdx];
+        const tr = this.cellSpace.cells[trIdx];
+        const bl = this.cellSpace.cells[blIdx];
+        const br = this.cellSpace.cells[brIdx];
+
+        const [newTl, newTr, newBl, newBr] = rule.applyToBlock(tl, tr, bl, br, this.tickCount);
+
+        if (tl.state !== newTl.state) { tl.state = newTl.state; this.markDirty(tlIdx); }
+        if (tr.state !== newTr.state) { tr.state = newTr.state; this.markDirty(trIdx); }
+        if (bl.state !== newBl.state) { bl.state = newBl.state; this.markDirty(blIdx); }
+        if (br.state !== newBr.state) { br.state = newBr.state; this.markDirty(brIdx); }
+      }
+    }
+
+    if (getDebugConfig().getECAIterationDebug()) {
+      console.log(this.cellSpace.cells.map((cell) => cell.state));
+      console.log(`Iterated (Margolus tick ${this.tickCount})`);
+    }
+  }
+
+  /** Return the current simulation tick index (used by Margolus partition phase). */
+  public getSimulationTick(): number {
+    return this.tickCount;
+  }
+
 
 }
 Cell.prototype.toString = function () {
@@ -345,6 +407,9 @@ const ruleRegistry = {
   },
   [NeighborhoodType.MOORE]: {
     "sand": new SandRule(),
+  },
+  [NeighborhoodType.MARGOLUS]: {
+    [RotationRule.RuleName]: new RotationRule(),
   },
 };
 

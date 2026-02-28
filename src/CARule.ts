@@ -6,6 +6,7 @@ import { Cell, CellSpace } from "./Cells";
 export enum NeighborhoodType {
   ELEMENTARY = "elementary",  // 1D: left, center, right
   MOORE = "moore",            // 2D: 3x3 square
+  MARGOLUS = "margolus",      // 2D: 2x2 block (alternating offset)
 }
 
 /**
@@ -21,6 +22,11 @@ export const NEIGHBORHOOD_METADATA: { [key in NeighborhoodType]: { label: string
     label: "Elementary (1D)",
     description: "1D neighborhood with left and right neighbors",
     neighborhoodSize: 3,
+  },
+  [NeighborhoodType.MARGOLUS]: {
+    label: "Margolus (2×2)",
+    description: "2D block neighborhood: alternates between even/odd 2×2 block partitions each tick",
+    neighborhoodSize: 4,
   },
 };
 
@@ -56,4 +62,44 @@ export abstract class CARule {
    * Used by the paintbrush tool to display state options.
    */
   abstract getStateLabel(state: number): string;
+}
+
+/**
+ * Abstract base class for Margolus neighborhood rules.
+ *
+ * Margolus rules operate on 2×2 blocks rather than individual cells.
+ * On even ticks the grid is partitioned into non-overlapping 2×2 blocks
+ * starting at (0,0); on odd ticks the partition is shifted by (1,1).
+ * Each block is updated atomically by `applyToBlock`.
+ */
+export abstract class MargolusRule extends CARule {
+  readonly neighborhoodType = NeighborhoodType.MARGOLUS;
+
+  /**
+   * Apply the rule to a single 2×2 block.
+   *
+   * @param tl  Cell at top-left of block
+   * @param tr  Cell at top-right of block
+   * @param bl  Cell at bottom-left of block
+   * @param br  Cell at bottom-right of block
+   * @param tick  Current tick index (even vs. odd selects partition phase)
+   * @returns New states as [topLeft, topRight, bottomLeft, bottomRight]
+   */
+  abstract applyToBlock(
+    tl: Cell,
+    tr: Cell,
+    bl: Cell,
+    br: Cell,
+    tick: number,
+  ): [Cell, Cell, Cell, Cell];
+
+  /**
+   * Not used for Margolus rules — iteration is performed block-wise via
+   * `applyToBlock`.  Throws if called accidentally.
+   */
+  apply(_cellSpace: CellSpace, _row: number, _col: number): Cell {
+    throw new Error(
+      "MargolusRule.apply() is not supported; use applyToBlock() via iterateMargolus()"
+    );
+  }
 }
